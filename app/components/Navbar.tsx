@@ -20,8 +20,7 @@ import { HamburgerIcon } from "@chakra-ui/icons";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
-  const bg = useColorModeValue("white", "gray.800");
-  const borderColor = useColorModeValue("gray.200", "gray.700");
+
 
   return (
     <Box
@@ -29,15 +28,32 @@ export default function Navbar() {
       position="sticky"
       top={0}
       zIndex={1000}
-      bg={bg}
+      bg="space.navy"
       borderBottom="1px"
-      borderColor={borderColor}
-      shadow="sm"
+      borderColor="whiteAlpha.200"
+      backdropFilter="blur(10px)"
+      sx={{
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          bottom: '-1px',
+          left: 0,
+          right: 0,
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)',
+        }
+      }}
     >
       <Container maxW="7xl" py={4}>
         <Flex justify="space-between" align="center">
           <ChakraLink href="/" _hover={{ textDecoration: "none" }}>
-            <Heading size="lg" color="brand.500">
+            <Heading 
+              size="lg" 
+              bgGradient="linear(to-r, neon.blue, neon.purple)"
+              bgClip="text"
+              fontWeight="bold"
+              letterSpacing="tight"
+            >
               PromptVault
             </Heading>
           </ChakraLink>
@@ -48,16 +64,18 @@ export default function Navbar() {
               <>
                 <ChakraLink
                   href="/prompts"
-                  color="gray.700"
+                  color="whiteAlpha.900"
                   fontWeight="medium"
-                  _hover={{ color: "brand.500" }}
+                  _hover={{ 
+                    color: "neon.blue",
+                    textShadow: '0 0 8px rgba(0, 243, 255, 0.5)'
+                  }}
                 >
                   My Prompts
                 </ChakraLink>
                 <Button
-                  variant="ghost"
+                  variant="neon"
                   onClick={logout}
-                  _hover={{ bg: "brand.50", color: "brand.500" }}
                 >
                   Logout
                 </Button>
@@ -66,17 +84,19 @@ export default function Navbar() {
               <>
                 <ChakraLink
                   href="/login"
-                  color="gray.700"
+                  color="whiteAlpha.900"
                   fontWeight="medium"
-                  _hover={{ color: "brand.500" }}
+                  _hover={{ 
+                    color: "neon.blue",
+                    textShadow: '0 0 8px rgba(0, 243, 255, 0.5)'
+                  }}
                 >
                   Login
                 </ChakraLink>
                 <Button
                   as={ChakraLink}
                   href="/signup"
-                  colorScheme="brand"
-                  _hover={{ bg: "brand.600" }}
+                  variant="cyber"
                 >
                   Sign Up
                 </Button>
@@ -92,21 +112,80 @@ export default function Navbar() {
                 aria-label="Open menu"
                 icon={<HamburgerIcon />}
                 variant="ghost"
+                color="whiteAlpha.900"
+                _hover={{
+                  bg: 'rgba(0, 243, 255, 0.1)',
+                  color: 'neon.blue'
+                }}
               />
-              <ChakraMenuList>
+              <ChakraMenuList
+                bg="space.navy"
+                borderColor="whiteAlpha.200"
+                boxShadow="0 4px 20px rgba(0, 0, 0, 0.4)"
+                sx={{
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 'md',
+                    padding: '1px',
+                    background: 'linear-gradient(45deg, #00f3ff, #9d00ff)',
+                    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                    WebkitMaskComposite: 'xor',
+                    maskComposite: 'exclude',
+                  }
+                }}
+              >
                 {user ? (
                   <>
-                    <ChakraMenuItem as={ChakraLink} href="/prompts">
+                    <ChakraMenuItem 
+                      as={ChakraLink} 
+                      href="/prompts"
+                      color="whiteAlpha.900"
+                      bg="space.navy"
+                      _hover={{
+                        bg: 'rgba(0, 243, 255, 0.1)',
+                        color: 'neon.blue'
+                      }}
+                    >
                       My Prompts
                     </ChakraMenuItem>
-                    <ChakraMenuItem onClick={logout}>Logout</ChakraMenuItem>
+                    <ChakraMenuItem 
+                      onClick={logout}
+                      color="whiteAlpha.900"
+                      bg="space.navy"
+                      _hover={{
+                        bg: 'rgba(157, 0, 255, 0.1)',
+                        color: 'neon.purple'
+                      }}
+                    >
+                      Logout
+                    </ChakraMenuItem>
                   </>
                 ) : (
                   <>
-                    <ChakraMenuItem as={ChakraLink} href="/login">
+                    <ChakraMenuItem 
+                      as={ChakraLink} 
+                      href="/login"
+                      color="whiteAlpha.900"
+                      bg="space.navy"
+                      _hover={{
+                        bg: 'rgba(0, 243, 255, 0.1)',
+                        color: 'neon.blue'
+                      }}
+                    >
                       Login
                     </ChakraMenuItem>
-                    <ChakraMenuItem as={ChakraLink} href="/signup">
+                    <ChakraMenuItem 
+                      as={ChakraLink} 
+                      href="/signup"
+                      color="whiteAlpha.900"
+                      bg="space.navy"
+                      _hover={{
+                        bg: 'rgba(157, 0, 255, 0.1)',
+                        color: 'neon.purple'
+                      }}
+                    >
                       Sign Up
                     </ChakraMenuItem>
                   </>

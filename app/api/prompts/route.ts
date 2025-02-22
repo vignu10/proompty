@@ -1,104 +1,48 @@
-import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { verifyToken } from "@/app/utils/auth";
-
-const prisma = new PrismaClient();
-
-// Middleware to verify auth token
-async function verifyAuth(request: Request) {
-  const token = request.headers.get("Authorization")?.split(" ")[1];
-
-  if (!token) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  const decoded = verifyToken(token);
-
-  if (!decoded) {
-    return { error: "Invalid token", status: 401 };
-  }
-
-  return { userId: decoded.userId };
-}
+import { NextResponse } from 'next/server';
+import { verifyAuth } from '@/app/middleware/auth';
+import { PromptController } from '@/app/controllers/PromptController';
 
 // Get all prompts for the authenticated user
 export async function GET(request: Request) {
   const auth = await verifyAuth(request);
-  if ("error" in auth) {
+  if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  try {
-    const prompts = await prisma.prompt.findMany({
-      where: { userId: auth.userId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        category: true,
-        tags: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    return NextResponse.json(prompts);
-  } catch (error) {
-    console.error("Error fetching prompts:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch prompts" },
-      { status: 500 }
-    );
+  const result = await PromptController.getAllPrompts(auth.userId);
+  if ('error' in result) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
+
+  return NextResponse.json(result.data, { status: result.status });
 }
 
 // Create a new prompt
 export async function POST(request: Request) {
   const auth = await verifyAuth(request);
-  if ("error" in auth) {
+  if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {
     const { title, content, category, tags } = await request.json();
-
-    // Input validation
-    if (!title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-
-    if (!content?.trim()) {
-      return NextResponse.json(
-        { error: "Content is required" },
-        { status: 400 }
-      );
-    }
-
-    const prompt = await prisma.prompt.create({
-      data: {
-        title: title.trim(),
-        content: content.trim(),
-        category: category?.trim() || null,
-        tags: Array.isArray(tags) ? tags.filter((tag) => tag?.trim()) : [],
-        userId: auth.userId,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        category: true,
-        tags: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const result = await PromptController.createPrompt({
+      title,
+      content,
+      category,
+      tags,
+      userId: auth.userId,
     });
 
-    return NextResponse.json(prompt, { status: 201 });
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json(result.data, { status: result.status });
   } catch (error) {
-    console.error("Error creating prompt:", error);
+    console.error('Error creating prompt:', error);
     return NextResponse.json(
-      { error: "Failed to create prompt" },
+      { error: 'Failed to create prompt' },
       { status: 500 }
     );
   }

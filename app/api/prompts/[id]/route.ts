@@ -1,36 +1,6 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { verifyToken } from "@/app/utils/auth";
-
-const prisma = new PrismaClient();
-
-// Middleware to verify auth token and ownership
-async function verifyAuthAndOwnership(request: Request, promptId: string) {
-  const token = request.headers.get("Authorization")?.split(" ")[1];
-
-  if (!token) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return { error: "Invalid token", status: 401 };
-  }
-
-  const prompt = await prisma.prompt.findUnique({
-    where: { id: promptId },
-  });
-
-  if (!prompt) {
-    return { error: "Prompt not found", status: 404 };
-  }
-
-  if (prompt.userId !== decoded.userId) {
-    return { error: "Unauthorized", status: 403 };
-  }
-
-  return { userId: decoded.userId, prompt };
-}
+import { verifyAuthAndOwnership } from "@/app/middleware/auth";
+import { PromptController } from "@/app/controllers/PromptController";
 
 // Get a single prompt
 export async function GET(
@@ -46,7 +16,17 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(result.prompt);
+    const promptResult = await PromptController.getPrompt(params.id);
+    if ("error" in promptResult) {
+      return NextResponse.json(
+        { error: promptResult.error },
+        { status: promptResult.status }
+      );
+    }
+
+    return NextResponse.json(promptResult.data, {
+      status: promptResult.status,
+    });
   } catch (error) {
     console.error("Error fetching prompt:", error);
     return NextResponse.json(
@@ -62,7 +42,19 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const result = await verifyAuthAndOwnership(request, params.id);
+    const auth = await verifyAuthAndOwnership(request, params.id);
+    if ("error" in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    const { title, content, category, tags } = await request.json();
+    const result = await PromptController.updatePrompt(params.id, {
+      title,
+      content,
+      category,
+      tags,
+    });
+
     if ("error" in result) {
       return NextResponse.json(
         { error: result.error },
@@ -70,42 +62,7 @@ export async function PUT(
       );
     }
 
-    const { title, content, category, tags } = await request.json();
-
-    // Input validation
-    if (!title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-
-    if (!content?.trim()) {
-      return NextResponse.json(
-        { error: "Content is required" },
-        { status: 400 }
-      );
-    }
-
-    const updatedPrompt = await prisma.prompt.update({
-      where: { id: params.id },
-      data: {
-        title: title.trim(),
-        content: content.trim(),
-        category: category?.trim() || null,
-        tags: Array.isArray(tags)
-          ? tags.filter((tag) => tag?.trim())
-          : result.prompt.tags,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        category: true,
-        tags: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    return NextResponse.json(updatedPrompt);
+    return NextResponse.json(result.data, { status: result.status });
   } catch (error) {
     console.error("Error updating prompt:", error);
     return NextResponse.json(
@@ -121,7 +78,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const result = await verifyAuthAndOwnership(request, params.id);
+    const auth = await verifyAuthAndOwnership(request, params.id);
+    if ("error" in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    const result = await PromptController.deletePrompt(params.id);
     if ("error" in result) {
       return NextResponse.json(
         { error: result.error },
@@ -129,14 +91,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.prompt.delete({
-      where: { id: params.id },
-    });
-
-    return NextResponse.json(
-      { message: "Prompt deleted successfully" },
-      { status: 200 }
-    );
+    return new NextResponse(null, { status: result.status });
   } catch (error) {
     console.error("Error deleting prompt:", error);
     return NextResponse.json(

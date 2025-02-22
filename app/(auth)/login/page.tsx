@@ -63,20 +63,64 @@ export default function LoginPage() {
       maxW="lg"
       py={{ base: "12", md: "16" }}
       px={{ base: "4", sm: "8" }}
+      position="relative"
+      zIndex={1}
+      _before={{
+        content: '""',
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '200%',
+        height: '200%',
+        background: 'radial-gradient(circle at center, rgba(0, 243, 255, 0.1) 0%, transparent 50%)',
+        zIndex: -1,
+        pointerEvents: 'none',
+      }}
     >
       <Stack spacing="8">
         <Stack spacing="6" textAlign="center">
-          <Heading size={{ base: "xl", md: "2xl" }} fontWeight="semibold">
+          <Heading 
+            size={{ base: "xl", md: "2xl" }} 
+            fontWeight="bold"
+            bgGradient="linear(to-r, neon.blue, neon.purple)"
+            bgClip="text"
+            letterSpacing="tight"
+          >
             Welcome back
           </Heading>
-          <Text color="gray.600">Sign in to access your prompts</Text>
+          <Text 
+            color="whiteAlpha.800"
+            fontSize="lg"
+            letterSpacing="wide"
+          >
+            Sign in to access your prompts
+          </Text>
         </Stack>
         <Box
           py={{ base: "0", sm: "8" }}
           px={{ base: "4", sm: "10" }}
-          bg={{ base: "transparent", sm: "white" }}
-          boxShadow={{ base: "none", sm: "md" }}
-          borderRadius={{ base: "none", sm: "xl" }}
+          bg="space.navy"
+          borderRadius="xl"
+          position="relative"
+          overflow="hidden"
+          _before={{
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: 'xl',
+            padding: '1px',
+            background: 'linear-gradient(45deg, #00f3ff, #9d00ff)',
+            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+            WebkitMaskComposite: 'xor',
+            maskComposite: 'exclude',
+          }}
+          sx={{
+            backdropFilter: 'blur(10px)',
+          }}
         >
           <form onSubmit={handleSubmit}>
             <Stack spacing="6">
@@ -108,27 +152,53 @@ export default function LoginPage() {
                       }
                       icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
                       onClick={() => setShowPassword(!showPassword)}
+                      color="neon.blue"
+                      _hover={{
+                        bg: 'rgba(0, 243, 255, 0.1)',
+                        color: 'neon.purple',
+                      }}
                     />
                   </InputRightElement>
                 </InputGroup>
               </FormControl>
               <Button
                 type="submit"
-                colorScheme="blue"
+                variant="cyber"
                 size="lg"
                 fontSize="md"
                 isLoading={isLoading}
+                sx={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    top: '0',
+                    left: '0',
+                    width: '200%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                    transform: 'translateX(-100%)',
+                    transition: 'transform 0.5s ease',
+                  },
+                  '&:hover::after': {
+                    transform: 'translateX(50%)',
+                  },
+                }}
               >
                 Sign in
               </Button>
               <VStack spacing="1">
-                <Text color="gray.600">
+                <Text color="whiteAlpha.700">
                   Don&apos;t have an account?{" "}
                   <ChakraLink
                     href="/signup"
-                    color="brand.500"
+                    color="neon.blue"
                     fontWeight="semibold"
-                    _hover={{ color: "brand.600" }}
+                    _hover={{ 
+                      color: "neon.purple",
+                      textShadow: '0 0 8px rgba(157, 0, 255, 0.5)',
+                    }}
                   >
                     Sign up
                   </ChakraLink>

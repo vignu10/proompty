@@ -1,8 +1,40 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
+import {
+  Box,
+  Button,
+  Container,
+  Flex,
+  Grid,
+  Heading,
+  IconButton,
+  Tag,
+  Text,
+  VStack,
+  useToast,
+  Spinner,
+  Badge,
+  Card,
+  CardHeader,
+  CardBody,
+  CardFooter,
+  Stack,
+  HStack,
+  Tooltip,
+  useDisclosure,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
+} from "@chakra-ui/react";
+import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
+import { useRouter } from "next/navigation";
+import { containerStyles, gradientTextStyles, featureCardStyles } from "../styles/components";
 
 interface Prompt {
   id: string;
@@ -16,11 +48,19 @@ interface Prompt {
 export default function PromptsPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const { token } = useAuth();
+  const toast = useToast();
+  const router = useRouter();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    fetchPrompts();
+    if (token) {
+      fetchPrompts();
+    } else {
+      setLoading(false);
+    }
   }, [token]);
 
   const fetchPrompts = async () => {
@@ -38,16 +78,28 @@ export default function PromptsPage() {
       const data = await response.json();
       setPrompts(data);
     } catch (err) {
-      console.log(err);
-      setError("Failed to load prompts");
+      toast({
+        title: "Error",
+        description: "Failed to load prompts",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const deletePrompt = async (id: string) => {
+  const handleDeleteClick = (id: string) => {
+    setSelectedPromptId(id);
+    onOpen();
+  };
+
+  const deletePrompt = async () => {
+    if (!selectedPromptId) return;
+
     try {
-      const response = await fetch(`/api/prompts/${id}`, {
+      const response = await fetch(`/api/prompts/${selectedPromptId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -58,67 +110,253 @@ export default function PromptsPage() {
         throw new Error("Failed to delete prompt");
       }
 
-      setPrompts(prompts.filter((prompt) => prompt.id !== id));
+      setPrompts(prompts.filter((prompt) => prompt.id !== selectedPromptId));
+      toast({
+        title: "Success",
+        description: "Prompt deleted successfully",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
     } catch (err) {
-      console.log(err);
-      setError("Failed to delete prompt");
+      toast({
+        title: "Error",
+        description: "Failed to delete prompt",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      onClose();
+      setSelectedPromptId(null);
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" minH="60vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+      </Flex>
+    );
+  }
+
+  if (!token) {
+    return (
+      <Container {...containerStyles}>
+        <VStack spacing={8} align="center">
+          <Heading size="xl" {...gradientTextStyles}>
+            Welcome to PromptVault
+          </Heading>
+          <Text fontSize="lg" textAlign="center">
+            Please log in to view and manage your prompts.
+          </Text>
+          <Button as={Link} href="/login" variant="cyber" size="lg">
+            Log In
+          </Button>
+        </VStack>
+      </Container>
+    );
+  }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">My Prompts</h1>
-        <Link
-          href="/prompts/new"
-          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-        >
-          Create New Prompt
-        </Link>
-      </div>
+    <Container {...containerStyles}>
+      <VStack spacing={8} align="stretch">
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Heading size="lg" mb={2} {...gradientTextStyles}>
+              My Prompts
+            </Heading>
+            <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
+              {prompts.length} prompts in your collection
+            </Text>
+          </Box>
+          <Button
+            leftIcon={<AddIcon />}
+            variant="cyber"
+            size="lg"
+            onClick={() => router.push("/prompts/new")}
+          >
+            Create New Prompt
+          </Button>
+        </Flex>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {prompts.map((prompt) => (
-          <div key={prompt.id} className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-2">{prompt.title}</h2>
-            <p className="text-gray-600 mb-4">{prompt.content}</p>
-            {prompt.category && (
-              <p className="text-sm text-gray-500 mb-2">
-                Category: {prompt.category}
-              </p>
-            )}
-            {prompt.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {prompt.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-sm"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-end space-x-2">
-              <Link
-                href={`/prompts/${prompt.id}/edit`}
-                className="text-indigo-600 hover:text-indigo-800"
+        {prompts.length === 0 ? (
+          <Text fontSize="lg" textAlign="center">
+            You don't have any prompts yet. Create your first prompt to get started!
+          </Text>
+        ) : (
+          <Grid
+            templateColumns={{
+              base: "1fr",
+              md: "repeat(2, 1fr)",
+              lg: "repeat(3, 1fr)",
+            }}
+            gap={6}
+            sx={{
+              '& > *': {
+                transform: 'perspective(1000px) rotateX(5deg)',
+                transition: 'transform 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'perspective(1000px) rotateX(0deg) translateY(-10px)',
+                },
+              },
+            }}
+          >
+            {prompts.map((prompt) => (
+              <Card
+                key={prompt.id}
+                size="lg"
+                {...featureCardStyles.container}
               >
-                Edit
-              </Link>
-              <button
-                onClick={() => deletePrompt(prompt.id)}
-                className="text-red-600 hover:text-red-800"
+                <Box {...featureCardStyles.wrapper}>
+                  <CardHeader>
+                    <Heading size="md" noOfLines={2}>
+                      {prompt.title}
+                    </Heading>
+                  </CardHeader>
+
+                  <CardBody>
+                    <Stack spacing={4}>
+                      <Text noOfLines={3} color="whiteAlpha.800">
+                        {prompt.content}
+                      </Text>
+
+                      {prompt.category && (
+                        <Badge
+                          bg="neon.purple"
+                          color="white"
+                          alignSelf="start"
+                          sx={{
+                            boxShadow: '0 0 10px rgba(157, 0, 255, 0.3)',
+                          }}
+                        >
+                          {prompt.category}
+                        </Badge>
+                      )}
+
+                      {prompt.tags.length > 0 && (
+                        <Flex gap={2} wrap="wrap">
+                          {prompt.tags.map((tag, index) => (
+                            <Tag
+                              key={index}
+                              size="md"
+                              bg="space.navy"
+                              color="neon.blue"
+                              border="1px solid"
+                              borderColor="neon.blue"
+                              boxShadow="0 0 10px rgba(0, 243, 255, 0.2)"
+                              _hover={{
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 0 15px rgba(0, 243, 255, 0.4)',
+                              }}
+                            >
+                              {tag}
+                            </Tag>
+                          ))}
+                        </Flex>
+                      )}
+                    </Stack>
+                  </CardBody>
+
+                  <CardFooter>
+                    <HStack spacing={2} justify="flex-end" width="100%">
+                      <Tooltip label="Edit prompt">
+                        <IconButton
+                          aria-label="Edit prompt"
+                          icon={<EditIcon />}
+                          variant="neon"
+                          onClick={() => router.push(`/prompts/${prompt.id}/edit`)}
+                          sx={{
+                            '&:hover': {
+                              transform: 'rotate(15deg) scale(1.1)',
+                            },
+                          }}
+                        />
+                      </Tooltip>
+                      <Tooltip label="Delete prompt">
+                        <IconButton
+                          icon={<DeleteIcon />}
+                          aria-label="Delete prompt"
+                          variant="ghost"
+                          color="red.400"
+                          onClick={() => handleDeleteClick(prompt.id)}
+                          sx={{
+                            '&:hover': {
+                              bg: 'rgba(229, 62, 62, 0.2)',
+                              color: 'red.300',
+                              transform: 'rotate(-15deg) scale(1.1)',
+                            },
+                          }}
+                        />
+                      </Tooltip>
+                    </HStack>
+                  </CardFooter>
+                </Box>
+              </Card>
+            ))}
+          </Grid>
+        )}
+
+        <AlertDialog
+          isOpen={isOpen}
+          leastDestructiveRef={cancelRef}
+          onClose={onClose}
+        >
+          <AlertDialogOverlay>
+            <AlertDialogContent
+              bg="space.navy"
+              borderColor="whiteAlpha.200"
+              sx={{
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '-2px',
+                  left: '-2px',
+                  right: '-2px',
+                  bottom: '-2px',
+                  background: 'linear-gradient(45deg, #00f3ff, #9d00ff)',
+                  zIndex: -1,
+                  opacity: 0.2,
+                },
+              }}
+            >
+              <AlertDialogHeader
+                fontSize="lg"
+                fontWeight="bold"
+                bgGradient="linear(to-r, red.500, red.300)"
+                bgClip="text"
+                letterSpacing="wide"
               >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+                Delete Prompt
+              </AlertDialogHeader>
+
+              <AlertDialogBody>
+                Are you sure? This action cannot be undone.
+              </AlertDialogBody>
+
+              <AlertDialogFooter>
+                <Button ref={cancelRef} onClick={onClose} variant="neon">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={deletePrompt}
+                  ml={3}
+                  bg="red.500"
+                  color="white"
+                  _hover={{
+                    bg: 'red.600',
+                    boxShadow: '0 0 15px rgba(229, 62, 62, 0.5)',
+                  }}
+                >
+                  Delete
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialogOverlay>
+        </AlertDialog>
+      </VStack>
+    </Container>
   );
 }
