@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import {
@@ -36,7 +37,6 @@ import SearchBar from "../components/SearchBar";
 import PromptCard from "../components/PromptCard";
 import PromptModal from "../components/PromptModal";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
-import { useRouter } from "next/navigation";
 import {
   containerStyles,
   gradientTextStyles,
@@ -68,7 +68,7 @@ export default function PromptsPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filteredPrompts, setFilteredPrompts] = useState<Prompt[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [visibility, setVisibility] = useState<PromptVisibility>("public");
+  const [visibility, setVisibility] = useState<PromptVisibility>("all");
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
@@ -133,8 +133,21 @@ export default function PromptsPage() {
   }, [token, visibility, currentPage, user, toast]);
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterParam = urlParams.get("filter");
+    if (filterParam === "private") {
+      setVisibility("private");
+    }
+  }, []); // Only run on mount
+
+  useEffect(() => {
+    if (visibility === "private") {
+      router.push("/prompts?filter=private", undefined);
+    } else {
+      router.push("/prompts", undefined);
+    }
     setCurrentPage(1); // Reset to first page when visibility changes
-  }, [visibility]);
+  }, [visibility, router]);
 
   useEffect(() => {
     fetchPrompts();
@@ -304,7 +317,9 @@ export default function PromptsPage() {
                   prompt={prompt}
                   currentUserId={user?.id || ""}
                   onView={(promptId) => {
-                    const selectedPrompt = prompts.find(p => p.id === promptId);
+                    const selectedPrompt = prompts.find(
+                      (p) => p.id === promptId
+                    );
                     if (selectedPrompt) {
                       setSelectedPrompt(selectedPrompt);
                       onViewOpen();

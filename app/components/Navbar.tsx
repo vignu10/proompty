@@ -76,42 +76,20 @@ export default function Navbar() {
             display={{ base: "none", md: "flex" }}
             align="center"
           >
-            <IconButton
-              aria-label="Toggle color mode"
-              icon={isDark ? <SunIcon /> : <MoonIcon />}
-              variant="ghost"
-              className="button-primary"
-              onClick={toggleColorMode}
+            <ChakraLink
+              href="/prompts"
               color="whiteAlpha.900"
+              fontWeight="medium"
               _hover={{
                 color: "neon.blue",
                 textShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
               }}
-            />
+            >
+              Prompts
+            </ChakraLink>
+
             {user ? (
               <>
-                <ChakraLink
-                  href="/prompts"
-                  color="whiteAlpha.900"
-                  fontWeight="medium"
-                  _hover={{
-                    color: "neon.blue",
-                    textShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
-                  }}
-                >
-                  Prompts
-                </ChakraLink>
-                <ChakraLink
-                  href="/prompts?filter=private"
-                  color="whiteAlpha.900"
-                  fontWeight="medium"
-                  _hover={{
-                    color: "neon.blue",
-                    textShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
-                  }}
-                >
-                  My Prompts
-                </ChakraLink>
                 <ChakraMenu>
                   <ChakraMenuButton
                     as={Button}
@@ -223,7 +201,6 @@ export default function Navbar() {
                     >
                       Logout
                     </ChakraMenuItem>
-
                   </>
                 ) : (
                   <>
