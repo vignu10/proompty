@@ -44,7 +44,7 @@ export default function LoginPage() {
         duration: 3000,
         isClosable: true,
       });
-      setTimeout(() => router.push("/dashboard"), 1000);
+      setTimeout(() => router.push("/prompts"), 1000);
     } catch (error) {
       toast({
         title: "Error",

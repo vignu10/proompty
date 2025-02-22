@@ -30,6 +30,7 @@ interface Prompt {
   content: string;
   category: string | null;
   tags: string[];
+  isPublic: boolean;
 }
 
 export default function EditPromptPage({ params }: { params: { id: string } }) {
@@ -39,6 +40,7 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
   const [category, setCategory] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const { token } = useAuth();
@@ -68,6 +70,7 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
       setContent(data.content);
       setCategory(data.category || "");
       setTags(data.tags || []);
+      setIsPublic(data.isPublic);
     } catch (err) {
       toast({
         title: "Error",
@@ -113,6 +116,7 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
           content: content.trim(),
           category: category.trim() || null,
           tags,
+          isPublic,
         }),
       });
 
@@ -190,6 +194,30 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
                 placeholder="Enter a descriptive title"
                 size="lg"
               />
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>Visibility</FormLabel>
+              <HStack spacing={4}>
+                <Button
+                  flex="1"
+                  variant={isPublic ? 'solid' : 'outline'}
+                  colorScheme="blue"
+                  onClick={() => setIsPublic(true)}
+                  _hover={{ transform: 'translateY(-1px)' }}
+                >
+                  Public
+                </Button>
+                <Button
+                  flex="1"
+                  variant={!isPublic ? 'solid' : 'outline'}
+                  colorScheme="blue"
+                  onClick={() => setIsPublic(false)}
+                  _hover={{ transform: 'translateY(-1px)' }}
+                >
+                  Private
+                </Button>
+              </HStack>
             </FormControl>
 
             <FormControl isRequired>

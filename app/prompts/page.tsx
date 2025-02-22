@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import {
@@ -32,6 +32,9 @@ import {
   AlertDialogContent,
   AlertDialogOverlay,
 } from "@chakra-ui/react";
+import SearchBar from "../components/SearchBar";
+import PromptCard from "../components/PromptCard";
+import PromptModal from "../components/PromptModal";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
 import { useRouter } from "next/navigation";
 import {
@@ -49,31 +52,54 @@ interface Prompt {
   id: string;
   title: string;
   content: string;
-  category: string | null;
   tags: string[];
   createdAt: string;
   isPublic: boolean;
   userId: string;
   user: User;
+  starredBy: string[];
+  originalPromptId?: string | null;
 }
+
+type PromptVisibility = "all" | "public" | "private";
 
 export default function PromptsPage() {
   const { user, token } = useAuth();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [filteredPrompts, setFilteredPrompts] = useState<Prompt[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [visibility, setVisibility] = useState<PromptVisibility>("public");
   const [loading, setLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalPrompts, setTotalPrompts] = useState(0);
+  const pageSize = 10;
   const toast = useToast();
   const router = useRouter();
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen: isDeleteOpen,
+    onOpen: onDeleteOpen,
+    onClose: onDeleteClose,
+  } = useDisclosure();
+  const {
+    isOpen: isViewOpen,
+    onOpen: onViewOpen,
+    onClose: onViewClose,
+  } = useDisclosure();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
-  useEffect(() => {
-    fetchPrompts();
-  }, [token]);
-
-  const fetchPrompts = async () => {
+  const fetchPrompts = useCallback(async () => {
     try {
-      const response = await fetch("/api/prompts", {
+      const queryParams = new URLSearchParams({
+        visibility,
+        page: currentPage.toString(),
+        pageSize: pageSize.toString(),
+      });
+
+      const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -82,15 +108,21 @@ export default function PromptsPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to fetch prompts");
+        const error = await response.text();
+        throw new Error(error || "Failed to fetch prompts");
       }
 
       const data = await response.json();
-      setPrompts(data);
+      setPrompts(data.prompts);
+      setFilteredPrompts(data.prompts);
+      setTotalPages(data.pagination.totalPages);
+      setTotalPrompts(data.pagination.total);
     } catch (err) {
+      console.error("Error fetching prompts:", err);
       toast({
         title: "Error",
-        description: "Failed to load prompts",
+        description:
+          err instanceof Error ? err.message : "Failed to load prompts",
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -98,16 +130,25 @@ export default function PromptsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, visibility, currentPage, user, toast]);
 
-  const handleDeleteClick = (id: string) => {
-    setSelectedPromptId(id);
-    onOpen();
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when visibility changes
+  }, [visibility]);
+
+  useEffect(() => {
+    fetchPrompts();
+  }, [fetchPrompts]);
+
+  const handleDeleteClick = (promptId: string) => {
+    setSelectedPromptId(promptId);
+    onDeleteOpen();
   };
 
   const deletePrompt = async () => {
-    if (!selectedPromptId) return;
+    if (!selectedPromptId || !token) return;
 
+    setIsDeleting(true);
     try {
       const response = await fetch(`/api/prompts/${selectedPromptId}`, {
         method: "DELETE",
@@ -117,27 +158,37 @@ export default function PromptsPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete prompt");
+        const error = await response.text();
+        throw new Error(error || "Failed to delete prompt");
       }
 
       setPrompts(prompts.filter((prompt) => prompt.id !== selectedPromptId));
+      setFilteredPrompts(
+        filteredPrompts.filter((prompt) => prompt.id !== selectedPromptId)
+      );
+
       toast({
         title: "Success",
         description: "Prompt deleted successfully",
         status: "success",
         duration: 3000,
         isClosable: true,
+        position: "top-right",
       });
     } catch (err) {
+      console.error("Error deleting prompt:", err);
       toast({
         title: "Error",
-        description: "Failed to delete prompt",
+        description:
+          err instanceof Error ? err.message : "Failed to delete prompt",
         status: "error",
         duration: 5000,
         isClosable: true,
+        position: "top-right",
       });
     } finally {
-      onClose();
+      setIsDeleting(false);
+      onDeleteClose();
       setSelectedPromptId(null);
     }
   };
@@ -151,234 +202,323 @@ export default function PromptsPage() {
   }
 
   return (
-    <Container {...containerStyles}>
-      <VStack spacing={8} align="stretch">
-        <Flex justify="space-between" align="center">
-          <Box>
-            <Heading size="lg" mb={2} {...gradientTextStyles}>
-              {user ? "My Prompts" : "Public Prompts"}
-            </Heading>
-            <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
-              {prompts.length}{" "}
-              {user ? "prompts in your collection" : "public prompts available"}
-            </Text>
-          </Box>
-          <Button
-            leftIcon={<AddIcon />}
-            variant="cyber"
-            size="lg"
-            onClick={() => router.push("/prompts/new")}
-          >
-            Create New Prompt
-          </Button>
-        </Flex>
-
-        {prompts.length === 0 ? (
-          <Text fontSize="lg" textAlign="center">
-            You don't have any prompts yet. Create your first prompt to get
-            started!
-          </Text>
-        ) : (
-          <Grid
-            templateColumns={{
-              base: "1fr",
-              md: "repeat(2, 1fr)",
-              lg: "repeat(3, 1fr)",
-            }}
-            gap={6}
-            sx={{
-              "& > *": {
-                transform: "perspective(1000px) rotateX(5deg)",
-                transition: "transform 0.3s ease-in-out",
-                "&:hover": {
-                  transform:
-                    "perspective(1000px) rotateX(0deg) translateY(-10px)",
-                },
-              },
-            }}
-          >
-            {prompts.map((prompt) => (
-              <Card key={prompt.id} size="lg" {...featureCardStyles.container}>
-                <Box {...featureCardStyles.wrapper}>
-                  <CardHeader>
-                    <Flex justify="space-between" align="start" mb={2}>
-                      <Heading size="md" noOfLines={2} flex={1} color="white">
-                        {prompt.title}
-                      </Heading>
-                      <Badge
-                        ml={2}
-                        bg={prompt.isPublic ? "green.500" : "orange.500"}
-                        color="white"
-                        px={2}
-                        py={1}
-                        borderRadius="md"
-                        fontSize="xs"
-                        textTransform="uppercase"
-                        letterSpacing="wide"
-                        sx={{
-                          boxShadow: prompt.isPublic
-                            ? "0 0 10px rgba(72, 187, 120, 0.3)"
-                            : "0 0 10px rgba(237, 137, 54, 0.3)",
-                        }}
-                      >
-                        {prompt.isPublic ? "Public" : "Private"}
-                      </Badge>
-                    </Flex>
-                    {prompt.user && (
-                      <Text fontSize="sm" color="whiteAlpha.700">
-                        By {prompt.user.name || prompt.user.email}
-                      </Text>
-                    )}
-                  </CardHeader>
-
-                  <CardBody>
-                    <Stack spacing={4}>
-                      <Text noOfLines={3} color="whiteAlpha.800">
-                        {prompt.content}
-                      </Text>
-
-                      {prompt.category && (
-                        <Badge
-                          bg="neon.purple"
-                          color="white"
-                          alignSelf="start"
-                          sx={{
-                            boxShadow: "0 0 10px rgba(157, 0, 255, 0.3)",
-                          }}
-                        >
-                          {prompt.category}
-                        </Badge>
-                      )}
-
-                      {prompt.tags.length > 0 && (
-                        <Flex gap={2} wrap="wrap">
-                          {prompt.tags.map((tag, index) => (
-                            <Tag
-                              key={index}
-                              size="md"
-                              bg="space.navy"
-                              color="neon.blue"
-                              border="1px solid"
-                              borderColor="neon.blue"
-                              boxShadow="0 0 10px rgba(0, 243, 255, 0.2)"
-                              _hover={{
-                                transform: "translateY(-1px)",
-                                boxShadow: "0 0 15px rgba(0, 243, 255, 0.4)",
-                              }}
-                            >
-                              {tag}
-                            </Tag>
-                          ))}
-                        </Flex>
-                      )}
-                    </Stack>
-                  </CardBody>
-
-                  <CardFooter>
-                    <HStack spacing={2} justify="flex-end" width="100%">
-                      {user && prompt.userId === user.id && (
-                        <>
-                          <Tooltip label="Edit prompt">
-                            <IconButton
-                              aria-label="Edit prompt"
-                              icon={<EditIcon />}
-                              variant="neon"
-                              onClick={() =>
-                                router.push(`/prompts/${prompt.id}/edit`)
-                              }
-                              sx={{
-                                "&:hover": {
-                                  transform: "rotate(15deg) scale(1.1)",
-                                },
-                              }}
-                            />
-                          </Tooltip>
-                          <Tooltip label="Delete prompt">
-                            <IconButton
-                              icon={<DeleteIcon />}
-                              aria-label="Delete prompt"
-                              variant="ghost"
-                              color="red.400"
-                              onClick={() => handleDeleteClick(prompt.id)}
-                              sx={{
-                                "&:hover": {
-                                  bg: "rgba(229, 62, 62, 0.2)",
-                                  color: "red.300",
-                                  transform: "rotate(-15deg) scale(1.1)",
-                                },
-                              }}
-                            />
-                          </Tooltip>
-                        </>
-                      )}
-                    </HStack>
-                  </CardFooter>
-                </Box>
-              </Card>
-            ))}
-          </Grid>
-        )}
-
-        <AlertDialog
-          isOpen={isOpen}
-          leastDestructiveRef={cancelRef}
-          onClose={onClose}
-        >
-          <AlertDialogOverlay>
-            <AlertDialogContent
-              bg="space.navy"
-              borderColor="whiteAlpha.200"
-              sx={{
-                position: "relative",
-                overflow: "hidden",
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  top: "-2px",
-                  left: "-2px",
-                  right: "-2px",
-                  bottom: "-2px",
-                  background: "linear-gradient(45deg, #00f3ff, #9d00ff)",
-                  zIndex: -1,
-                  opacity: 0.2,
-                },
-              }}
-            >
-              <AlertDialogHeader
-                fontSize="lg"
-                fontWeight="bold"
-                bgGradient="linear(to-r, red.500, red.300)"
-                bgClip="text"
-                letterSpacing="wide"
-              >
-                Delete Prompt
-              </AlertDialogHeader>
-
-              <AlertDialogBody>
-                Are you sure? This action cannot be undone.
-              </AlertDialogBody>
-
-              <AlertDialogFooter>
-                <Button ref={cancelRef} onClick={onClose} variant="neon">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={deletePrompt}
-                  ml={3}
-                  bg="red.500"
-                  color="white"
-                  _hover={{
-                    bg: "red.600",
-                    boxShadow: "0 0 15px rgba(229, 62, 62, 0.5)",
-                  }}
+    <>
+      <Container {...containerStyles}>
+        <VStack spacing={8} align="stretch">
+          <Flex justify="space-between" align="center" flexWrap="wrap" gap={4}>
+            <Box>
+              <Heading size="lg" mb={2} className="gradient-text">
+                {visibility === "public"
+                  ? "Public Prompts"
+                  : visibility === "private"
+                  ? "My Prompts"
+                  : "All Prompts"}
+              </Heading>
+              <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
+                {prompts.length}{" "}
+                {visibility === "private"
+                  ? "private prompts"
+                  : visibility === "public"
+                  ? "public prompts"
+                  : "total prompts"}
+              </Text>
+            </Box>
+            <HStack spacing={4} wrap="wrap">
+              <Box className="select-container" minW="150px">
+                <select
+                  className="select-field"
+                  value={visibility}
+                  onChange={(e) =>
+                    setVisibility(e.target.value as PromptVisibility)
+                  }
                 >
-                  Delete
+                  <option value="public">Public Prompts</option>
+                  {user && (
+                    <>
+                      <option value="all">All Prompts</option>
+                      <option value="private">My Prompts</option>
+                    </>
+                  )}
+                </select>
+              </Box>
+              {user && (
+                <Button
+                  leftIcon={<AddIcon />}
+                  className="button-primary"
+                  onClick={() => router.push("/prompts/new")}
+                >
+                  Create Prompt
                 </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialogOverlay>
-        </AlertDialog>
-      </VStack>
-    </Container>
+              )}
+            </HStack>
+          </Flex>
+
+          {prompts.length === 0 ? (
+            <Box
+              textAlign="center"
+              p={8}
+              borderRadius="xl"
+              className="prompt-card"
+            >
+              <Heading size="md" mb={4} className="gradient-text">
+                {visibility === "public"
+                  ? "No Public Prompts Yet"
+                  : visibility === "private"
+                  ? "No Private Prompts Yet"
+                  : "No Prompts Yet"}
+              </Heading>
+              <Text color="whiteAlpha.800" fontSize="lg" mb={6}>
+                {user
+                  ? "Create your first prompt to get started!"
+                  : "Sign in to create and manage your own prompts."}
+              </Text>
+              {user ? (
+                <Button
+                  leftIcon={<AddIcon />}
+                  className="button-primary"
+                  onClick={() => router.push("/prompts/new")}
+                >
+                  Create First Prompt
+                </Button>
+              ) : (
+                <Button
+                  className="button-primary"
+                  onClick={() => router.push("/login")}
+                >
+                  Sign In
+                </Button>
+              )}
+            </Box>
+          ) : (
+            <Grid
+              templateColumns={{
+                base: "1fr",
+                md: "repeat(2, 1fr)",
+                lg: "repeat(3, 1fr)",
+              }}
+              gap={6}
+            >
+              {prompts.map((prompt) => (
+                <PromptCard
+                  key={prompt.id}
+                  prompt={prompt}
+                  currentUserId={user?.id || ""}
+                  onView={(promptId) => {
+                    const selectedPrompt = prompts.find(p => p.id === promptId);
+                    if (selectedPrompt) {
+                      setSelectedPrompt(selectedPrompt);
+                      onViewOpen();
+                    }
+                  }}
+                  onEdit={(promptId) => {
+                    router.push(`/prompts/${promptId}/edit`);
+                  }}
+                  onStar={async (promptId) => {
+                    if (!user) {
+                      toast({
+                        title: "Please log in",
+                        description: "You need to be logged in to star prompts",
+                        status: "warning",
+                        duration: 3000,
+                        isClosable: true,
+                      });
+                      return;
+                    }
+
+                    try {
+                      const response = await fetch("/api/prompts", {
+                        method: "PUT",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ promptId, action: "star" }),
+                      });
+
+                      if (!response.ok) {
+                        throw new Error("Failed to star prompt");
+                      }
+
+                      const updatedPrompt = await response.json();
+                      setPrompts(
+                        prompts.map((p) =>
+                          p.id === promptId ? updatedPrompt : p
+                        )
+                      );
+                      setFilteredPrompts(
+                        filteredPrompts.map((p) =>
+                          p.id === promptId ? updatedPrompt : p
+                        )
+                      );
+
+                      const isStarred = updatedPrompt.starredBy.includes(
+                        user.id
+                      );
+                      toast({
+                        title: isStarred
+                          ? "Prompt starred"
+                          : "Prompt unstarred",
+                        status: "success",
+                        duration: 2000,
+                        isClosable: true,
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Error",
+                        description: "Failed to star prompt",
+                        status: "error",
+                        duration: 3000,
+                        isClosable: true,
+                      });
+                    }
+                  }}
+                  onFork={
+                    prompt.isPublic
+                      ? async (promptId) => {
+                          if (!user) {
+                            toast({
+                              title: "Please log in",
+                              description:
+                                "You need to be logged in to fork prompts",
+                              status: "warning",
+                              duration: 3000,
+                              isClosable: true,
+                            });
+                            return;
+                          }
+
+                          try {
+                            const response = await fetch("/api/prompts", {
+                              method: "PUT",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                promptId,
+                                action: "fork",
+                              }),
+                            });
+
+                            if (!response.ok) {
+                              throw new Error("Failed to fork prompt");
+                            }
+
+                            const forkedPrompt = await response.json();
+                            setPrompts([forkedPrompt, ...prompts]);
+                            setFilteredPrompts([
+                              forkedPrompt,
+                              ...filteredPrompts,
+                            ]);
+
+                            toast({
+                              title: "Prompt forked successfully",
+                              description: "You can find it in your prompts",
+                              status: "success",
+                              duration: 2000,
+                              isClosable: true,
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Error",
+                              description: "Failed to fork prompt",
+                              status: "error",
+                              duration: 3000,
+                              isClosable: true,
+                            });
+                          }
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </Grid>
+          )}
+
+          <AlertDialog
+            isOpen={isDeleteOpen}
+            leastDestructiveRef={cancelRef}
+            onClose={onDeleteClose}
+            isCentered
+          >
+            <AlertDialogOverlay
+              bg="rgba(0, 0, 0, 0.4)"
+              backdropFilter="blur(8px)"
+            >
+              <AlertDialogContent
+                bg="space.navy"
+                borderColor="whiteAlpha.200"
+                borderWidth="1px"
+                borderRadius="xl"
+                boxShadow="0 8px 32px rgba(0, 243, 255, 0.1)"
+                _dark={{
+                  bg: "space.navy",
+                }}
+              >
+                <AlertDialogHeader
+                  fontSize="lg"
+                  fontWeight="bold"
+                  bgGradient="linear(to-r, neon.blue, neon.purple)"
+                  bgClip="text"
+                  borderBottom="1px solid"
+                  borderColor="whiteAlpha.200"
+                  pb={4}
+                >
+                  Delete Prompt
+                </AlertDialogHeader>
+
+                <AlertDialogBody py={6}>
+                  <Text color="whiteAlpha.900">
+                    Are you sure you want to delete this prompt? This action
+                    cannot be undone.
+                  </Text>
+                </AlertDialogBody>
+
+                <AlertDialogFooter
+                  borderTop="1px solid"
+                  borderColor="whiteAlpha.200"
+                  pt={4}
+                >
+                  <Button
+                    ref={cancelRef}
+                    onClick={onDeleteClose}
+                    variant="ghost"
+                    _hover={{
+                      bg: "whiteAlpha.100",
+                    }}
+                    isDisabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={deletePrompt}
+                    ml={3}
+                    variant="solid"
+                    bg="red.500"
+                    color="white"
+                    _hover={{
+                      bg: "red.600",
+                      transform: "scale(1.02)",
+                    }}
+                    _active={{
+                      bg: "red.700",
+                    }}
+                    isLoading={isDeleting}
+                    loadingText="Deleting..."
+                  >
+                    Delete
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialogOverlay>
+          </AlertDialog>
+        </VStack>
+        <PromptModal
+          isOpen={isViewOpen}
+          onClose={onViewClose}
+          prompt={selectedPrompt}
+        />
+      </Container>
+    </>
   );
 }

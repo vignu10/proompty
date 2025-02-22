@@ -2,10 +2,27 @@ import { NextResponse } from 'next/server';
 import { Prompt, PromptData, PromptUpdateData } from '@/app/models/Prompt';
 
 export class PromptController {
-  static async getAllPrompts(userId: string | null) {
+  static async getAllPrompts(
+    userId: string | null,
+    visibility: 'all' | 'public' | 'private' | 'starred' = 'all',
+    page: number = 1,
+    pageSize: number = 10,
+    tags: string[] = []
+  ) {
     try {
-      const prompts = await Prompt.findByUser(userId);
-      return { data: prompts, status: 200 };
+      const { prompts, total } = await Prompt.findByUser(userId, visibility, page, pageSize, tags);
+      return { 
+        data: { 
+          prompts,
+          pagination: {
+            total,
+            page,
+            pageSize,
+            totalPages: Math.ceil(total / pageSize)
+          }
+        }, 
+        status: 200 
+      };
     } catch (error) {
       console.error('Error fetching prompts:', error);
       return { error: 'Failed to fetch prompts', status: 500 };
@@ -22,6 +39,32 @@ export class PromptController {
     } catch (error) {
       console.error('Error fetching prompt:', error);
       return { error: 'Failed to fetch prompt', status: 500 };
+    }
+  }
+
+  static async toggleStar(promptId: string, userId: string) {
+    try {
+      const prompt = await Prompt.toggleStar(promptId, userId);
+      return { data: prompt, status: 200 };
+    } catch (error) {
+      console.error('Error toggling star:', error);
+      if (error instanceof Error && error.message === 'Prompt not found') {
+        return { error: 'Prompt not found', status: 404 };
+      }
+      return { error: 'Failed to toggle star', status: 500 };
+    }
+  }
+
+  static async forkPrompt(promptId: string, userId: string) {
+    try {
+      const prompt = await Prompt.forkPrompt(promptId, userId);
+      return { data: prompt, status: 200 };
+    } catch (error) {
+      console.error('Error forking prompt:', error);
+      if (error instanceof Error && error.message === 'Source prompt not found') {
+        return { error: 'Source prompt not found', status: 404 };
+      }
+      return { error: 'Failed to fork prompt', status: 500 };
     }
   }
 
