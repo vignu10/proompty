@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prompt, PromptData, PromptUpdateData } from '@/app/models/Prompt';
 
 export class PromptController {
-  static async getAllPrompts(userId: string) {
+  static async getAllPrompts(userId: string | null) {
     try {
       const prompts = await Prompt.findByUser(userId);
       return { data: prompts, status: 200 };

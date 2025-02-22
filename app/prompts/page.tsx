@@ -34,7 +34,16 @@ import {
 } from "@chakra-ui/react";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
 import { useRouter } from "next/navigation";
-import { containerStyles, gradientTextStyles, featureCardStyles } from "../styles/components";
+import {
+  containerStyles,
+  gradientTextStyles,
+  featureCardStyles,
+} from "../styles/components";
+
+interface User {
+  name: string | null;
+  email: string;
+}
 
 interface Prompt {
   id: string;
@@ -43,32 +52,33 @@ interface Prompt {
   category: string | null;
   tags: string[];
   createdAt: string;
+  isPublic: boolean;
+  userId: string;
+  user: User;
 }
 
 export default function PromptsPage() {
+  const { user, token } = useAuth();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
-  const { token } = useAuth();
   const toast = useToast();
   const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (token) {
-      fetchPrompts();
-    } else {
-      setLoading(false);
-    }
+    fetchPrompts();
   }, [token]);
 
   const fetchPrompts = async () => {
     try {
       const response = await fetch("/api/prompts", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
       });
 
       if (!response.ok) {
@@ -140,34 +150,17 @@ export default function PromptsPage() {
     );
   }
 
-  if (!token) {
-    return (
-      <Container {...containerStyles}>
-        <VStack spacing={8} align="center">
-          <Heading size="xl" {...gradientTextStyles}>
-            Welcome to PromptVault
-          </Heading>
-          <Text fontSize="lg" textAlign="center">
-            Please log in to view and manage your prompts.
-          </Text>
-          <Button as={Link} href="/login" variant="cyber" size="lg">
-            Log In
-          </Button>
-        </VStack>
-      </Container>
-    );
-  }
-
   return (
     <Container {...containerStyles}>
       <VStack spacing={8} align="stretch">
         <Flex justify="space-between" align="center">
           <Box>
             <Heading size="lg" mb={2} {...gradientTextStyles}>
-              My Prompts
+              {user ? "My Prompts" : "Public Prompts"}
             </Heading>
             <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
-              {prompts.length} prompts in your collection
+              {prompts.length}{" "}
+              {user ? "prompts in your collection" : "public prompts available"}
             </Text>
           </Box>
           <Button
@@ -182,7 +175,8 @@ export default function PromptsPage() {
 
         {prompts.length === 0 ? (
           <Text fontSize="lg" textAlign="center">
-            You don't have any prompts yet. Create your first prompt to get started!
+            You don't have any prompts yet. Create your first prompt to get
+            started!
           </Text>
         ) : (
           <Grid
@@ -193,26 +187,48 @@ export default function PromptsPage() {
             }}
             gap={6}
             sx={{
-              '& > *': {
-                transform: 'perspective(1000px) rotateX(5deg)',
-                transition: 'transform 0.3s ease-in-out',
-                '&:hover': {
-                  transform: 'perspective(1000px) rotateX(0deg) translateY(-10px)',
+              "& > *": {
+                transform: "perspective(1000px) rotateX(5deg)",
+                transition: "transform 0.3s ease-in-out",
+                "&:hover": {
+                  transform:
+                    "perspective(1000px) rotateX(0deg) translateY(-10px)",
                 },
               },
             }}
           >
             {prompts.map((prompt) => (
-              <Card
-                key={prompt.id}
-                size="lg"
-                {...featureCardStyles.container}
-              >
+              <Card key={prompt.id} size="lg" {...featureCardStyles.container}>
                 <Box {...featureCardStyles.wrapper}>
                   <CardHeader>
-                    <Heading size="md" noOfLines={2}>
-                      {prompt.title}
-                    </Heading>
+                    <Flex justify="space-between" align="start" mb={2}>
+                      <Heading size="md" noOfLines={2} flex={1} color="white">
+                        {prompt.title}
+                      </Heading>
+                      <Badge
+                        ml={2}
+                        bg={prompt.isPublic ? "green.500" : "orange.500"}
+                        color="white"
+                        px={2}
+                        py={1}
+                        borderRadius="md"
+                        fontSize="xs"
+                        textTransform="uppercase"
+                        letterSpacing="wide"
+                        sx={{
+                          boxShadow: prompt.isPublic
+                            ? "0 0 10px rgba(72, 187, 120, 0.3)"
+                            : "0 0 10px rgba(237, 137, 54, 0.3)",
+                        }}
+                      >
+                        {prompt.isPublic ? "Public" : "Private"}
+                      </Badge>
+                    </Flex>
+                    {prompt.user && (
+                      <Text fontSize="sm" color="whiteAlpha.700">
+                        By {prompt.user.name || prompt.user.email}
+                      </Text>
+                    )}
                   </CardHeader>
 
                   <CardBody>
@@ -227,7 +243,7 @@ export default function PromptsPage() {
                           color="white"
                           alignSelf="start"
                           sx={{
-                            boxShadow: '0 0 10px rgba(157, 0, 255, 0.3)',
+                            boxShadow: "0 0 10px rgba(157, 0, 255, 0.3)",
                           }}
                         >
                           {prompt.category}
@@ -246,8 +262,8 @@ export default function PromptsPage() {
                               borderColor="neon.blue"
                               boxShadow="0 0 10px rgba(0, 243, 255, 0.2)"
                               _hover={{
-                                transform: 'translateY(-1px)',
-                                boxShadow: '0 0 15px rgba(0, 243, 255, 0.4)',
+                                transform: "translateY(-1px)",
+                                boxShadow: "0 0 15px rgba(0, 243, 255, 0.4)",
                               }}
                             >
                               {tag}
@@ -260,35 +276,41 @@ export default function PromptsPage() {
 
                   <CardFooter>
                     <HStack spacing={2} justify="flex-end" width="100%">
-                      <Tooltip label="Edit prompt">
-                        <IconButton
-                          aria-label="Edit prompt"
-                          icon={<EditIcon />}
-                          variant="neon"
-                          onClick={() => router.push(`/prompts/${prompt.id}/edit`)}
-                          sx={{
-                            '&:hover': {
-                              transform: 'rotate(15deg) scale(1.1)',
-                            },
-                          }}
-                        />
-                      </Tooltip>
-                      <Tooltip label="Delete prompt">
-                        <IconButton
-                          icon={<DeleteIcon />}
-                          aria-label="Delete prompt"
-                          variant="ghost"
-                          color="red.400"
-                          onClick={() => handleDeleteClick(prompt.id)}
-                          sx={{
-                            '&:hover': {
-                              bg: 'rgba(229, 62, 62, 0.2)',
-                              color: 'red.300',
-                              transform: 'rotate(-15deg) scale(1.1)',
-                            },
-                          }}
-                        />
-                      </Tooltip>
+                      {user && prompt.userId === user.id && (
+                        <>
+                          <Tooltip label="Edit prompt">
+                            <IconButton
+                              aria-label="Edit prompt"
+                              icon={<EditIcon />}
+                              variant="neon"
+                              onClick={() =>
+                                router.push(`/prompts/${prompt.id}/edit`)
+                              }
+                              sx={{
+                                "&:hover": {
+                                  transform: "rotate(15deg) scale(1.1)",
+                                },
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip label="Delete prompt">
+                            <IconButton
+                              icon={<DeleteIcon />}
+                              aria-label="Delete prompt"
+                              variant="ghost"
+                              color="red.400"
+                              onClick={() => handleDeleteClick(prompt.id)}
+                              sx={{
+                                "&:hover": {
+                                  bg: "rgba(229, 62, 62, 0.2)",
+                                  color: "red.300",
+                                  transform: "rotate(-15deg) scale(1.1)",
+                                },
+                              }}
+                            />
+                          </Tooltip>
+                        </>
+                      )}
                     </HStack>
                   </CardFooter>
                 </Box>
@@ -307,16 +329,16 @@ export default function PromptsPage() {
               bg="space.navy"
               borderColor="whiteAlpha.200"
               sx={{
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
+                position: "relative",
+                overflow: "hidden",
+                "&::before": {
                   content: '""',
-                  position: 'absolute',
-                  top: '-2px',
-                  left: '-2px',
-                  right: '-2px',
-                  bottom: '-2px',
-                  background: 'linear-gradient(45deg, #00f3ff, #9d00ff)',
+                  position: "absolute",
+                  top: "-2px",
+                  left: "-2px",
+                  right: "-2px",
+                  bottom: "-2px",
+                  background: "linear-gradient(45deg, #00f3ff, #9d00ff)",
                   zIndex: -1,
                   opacity: 0.2,
                 },
@@ -346,8 +368,8 @@ export default function PromptsPage() {
                   bg="red.500"
                   color="white"
                   _hover={{
-                    bg: 'red.600',
-                    boxShadow: '0 0 15px rgba(229, 62, 62, 0.5)',
+                    bg: "red.600",
+                    boxShadow: "0 0 15px rgba(229, 62, 62, 0.5)",
                   }}
                 >
                   Delete

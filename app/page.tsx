@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "./context/AuthContext";
 import {
   Box,
   Container,
@@ -23,6 +26,14 @@ const MotionBox = motion(Box);
 
 export default function Home() {
   const glow = `${glowKeyframes} 3s infinite`;
+  const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.push("/prompts");
+    }
+  }, [user, router]);
 
   return (
     <Box
@@ -51,6 +62,7 @@ export default function Home() {
               Store and Manage Your{" "}
               <Text
                 as="span"
+                color={"white"}
                 position="relative"
                 _after={{
                   content: '""',
@@ -60,7 +72,6 @@ export default function Home() {
                   bottom: -1,
                   left: 0,
                   bg: "neon.blue",
-                  opacity: 0.3,
                   zIndex: -1,
                 }}
               >
@@ -74,8 +85,8 @@ export default function Home() {
               mx="auto"
               lineHeight="tall"
             >
-              PromptVault helps you organize, store, and manage your AI prompts
-              in one secure place. Never lose a great prompt again.
+              Proompty helps you organize, store, and manage your AI prompts in
+              one secure place. Never lose a great prompt again.
             </Text>
             <Box mt={10} display="flex" gap={6} justifyContent="center">
               <Button

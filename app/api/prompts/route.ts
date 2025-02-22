@@ -2,14 +2,12 @@ import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/app/middleware/auth';
 import { PromptController } from '@/app/controllers/PromptController';
 
-// Get all prompts for the authenticated user
+// Get prompts - public ones for everyone, private ones only for authenticated users
 export async function GET(request: Request) {
-  const auth = await verifyAuth(request);
-  if ('error' in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
+  const auth = await verifyAuth(request).catch(() => null);
+  const userId = auth && !('error' in auth) ? auth.userId : null;
 
-  const result = await PromptController.getAllPrompts(auth.userId);
+  const result = await PromptController.getAllPrompts(userId);
   if ('error' in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -25,13 +23,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { title, content, category, tags } = await request.json();
+    const { title, content, category, tags, isPublic } = await request.json();
     const result = await PromptController.createPrompt({
       title,
       content,
       category,
       tags,
       userId: auth.userId,
+      isPublic: isPublic ?? false,
     });
 
     if ('error' in result) {
