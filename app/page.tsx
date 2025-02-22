@@ -112,8 +112,7 @@ export default function Home() {
               spacing={16}
               mt={24}
               px={{ base: 4, md: 8, lg: 12 }}
-              pt={{ base: 6, md: 10, lg: 15}}
-
+              pt={16}
             >
               {[
                 {
