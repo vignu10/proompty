@@ -1,88 +1,157 @@
 'use client';
 
+import {
+  Box,
+  Button,
+  Container,
+  FormControl,
+  FormLabel,
+  Heading,
+  Input,
+  Stack,
+  Text,
+  useToast,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+} from '@chakra-ui/react';
 import { useState } from 'react';
-import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 
 export default function SignupPage() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const { signup } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+
     try {
-      await signup(email, password, name);
-      router.push('/prompts');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign up');
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+
+      toast({
+        title: 'Account created successfully!',
+        description: 'Redirecting to login...',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      // Wait for the toast to be visible before redirecting
+      setTimeout(() => {
+        router.push('/login');
+      }, 1000);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create account',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+    <Container maxW="lg" py={{ base: '12', md: '16' }} px={{ base: '4', sm: '8' }}>
+      <Stack spacing="8">
+        <Stack spacing="6" textAlign="center">
+          <Heading size={{ base: 'xl', md: '2xl' }} fontWeight="semibold">
             Create your account
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="text-red-500 text-center">{error}</div>
-          )}
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <input
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                type="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Sign up
-            </button>
-          </div>
-        </form>
-        <div className="text-center">
-          <Link href="/login" className="text-indigo-600 hover:text-indigo-500">
-            Already have an account? Sign in
+          </Heading>
+          <Text color="gray.600">
+            Start managing your AI prompts effectively
+          </Text>
+        </Stack>
+        <Box
+          py={{ base: '0', sm: '8' }}
+          px={{ base: '4', sm: '10' }}
+          bg={{ base: 'transparent', sm: 'white' }}
+          boxShadow={{ base: 'none', sm: 'md' }}
+          borderRadius={{ base: 'none', sm: 'xl' }}
+        >
+          <form onSubmit={handleSubmit}>
+            <Stack spacing="6">
+              <FormControl isRequired>
+                <FormLabel htmlFor="name">Name</FormLabel>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="John Doe"
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel htmlFor="email">Email</FormLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="john@example.com"
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel htmlFor="password">Password</FormLabel>
+                <InputGroup>
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      variant="ghost"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      onClick={() => setShowPassword(!showPassword)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+              </FormControl>
+              <Button
+                type="submit"
+                colorScheme="blue"
+                size="lg"
+                fontSize="md"
+                isLoading={isLoading}
+              >
+                Sign up
+              </Button>
+            </Stack>
+          </form>
+        </Box>
+        <Text textAlign="center">
+          Already have an account?{' '}
+          <Link href="/login" style={{ color: '#3182CE', textDecoration: 'none' }}>
+            Log in
           </Link>
-        </div>
-      </div>
-    </div>
+        </Text>
+      </Stack>
+    </Container>
   );
 }

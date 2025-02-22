@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { Link as ChakraLink } from '@chakra-ui/next-js';
+import { Link as ChakraLink } from "@chakra-ui/next-js";
 import {
   Box,
   Button,
@@ -9,28 +9,26 @@ import {
   HStack,
   Heading,
   IconButton,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
+  Menu as ChakraMenu,
+  MenuButton as ChakraMenuButton,
+  MenuItem as ChakraMenuItem,
+  MenuList as ChakraMenuList,
   useColorModeValue,
-  useDisclosure,
-} from '@chakra-ui/react';
-import { useAuth } from '../context/AuthContext';
-import { HamburgerIcon } from '@chakra-ui/icons';
+} from "@chakra-ui/react";
+import { useAuth } from "../context/AuthContext";
+import { HamburgerIcon } from "@chakra-ui/icons";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const bg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const bg = useColorModeValue("white", "gray.800");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
 
   return (
     <Box
       as="nav"
       position="sticky"
       top={0}
-      zIndex="sticky"
+      zIndex={1000}
       bg={bg}
       borderBottom="1px"
       borderColor={borderColor}
@@ -38,28 +36,28 @@ export default function Navbar() {
     >
       <Container maxW="7xl" py={4}>
         <Flex justify="space-between" align="center">
-          <ChakraLink href="/" _hover={{ textDecoration: 'none' }}>
+          <ChakraLink href="/" _hover={{ textDecoration: "none" }}>
             <Heading size="lg" color="brand.500">
               PromptVault
             </Heading>
           </ChakraLink>
 
           {/* Desktop Navigation */}
-          <HStack spacing={4} display={{ base: 'none', md: 'flex' }}>
+          <HStack spacing={4} display={{ base: "none", md: "flex" }}>
             {user ? (
               <>
                 <ChakraLink
                   href="/prompts"
                   color="gray.700"
                   fontWeight="medium"
-                  _hover={{ color: 'brand.500' }}
+                  _hover={{ color: "brand.500" }}
                 >
                   My Prompts
                 </ChakraLink>
                 <Button
                   variant="ghost"
                   onClick={logout}
-                  _hover={{ bg: 'brand.50', color: 'brand.500' }}
+                  _hover={{ bg: "brand.50", color: "brand.500" }}
                 >
                   Logout
                 </Button>
@@ -70,7 +68,7 @@ export default function Navbar() {
                   href="/login"
                   color="gray.700"
                   fontWeight="medium"
-                  _hover={{ color: 'brand.500' }}
+                  _hover={{ color: "brand.500" }}
                 >
                   Login
                 </ChakraLink>
@@ -78,7 +76,7 @@ export default function Navbar() {
                   as={ChakraLink}
                   href="/signup"
                   colorScheme="brand"
-                  _hover={{ bg: 'brand.600' }}
+                  _hover={{ bg: "brand.600" }}
                 >
                   Sign Up
                 </Button>
@@ -87,34 +85,34 @@ export default function Navbar() {
           </HStack>
 
           {/* Mobile Navigation */}
-          <Box display={{ base: 'block', md: 'none' }}>
-            <Menu>
-              <MenuButton
+          <Box display={{ base: "block", md: "none" }}>
+            <ChakraMenu>
+              <ChakraMenuButton
                 as={IconButton}
-                aria-label="Menu"
+                aria-label="Open menu"
                 icon={<HamburgerIcon />}
                 variant="ghost"
               />
-              <MenuList>
+              <ChakraMenuList>
                 {user ? (
                   <>
-                    <MenuItem as={ChakraLink} href="/prompts">
+                    <ChakraMenuItem as={ChakraLink} href="/prompts">
                       My Prompts
-                    </MenuItem>
-                    <MenuItem onClick={logout}>Logout</MenuItem>
+                    </ChakraMenuItem>
+                    <ChakraMenuItem onClick={logout}>Logout</ChakraMenuItem>
                   </>
                 ) : (
                   <>
-                    <MenuItem as={ChakraLink} href="/login">
+                    <ChakraMenuItem as={ChakraLink} href="/login">
                       Login
-                    </MenuItem>
-                    <MenuItem as={ChakraLink} href="/signup">
+                    </ChakraMenuItem>
+                    <ChakraMenuItem as={ChakraLink} href="/signup">
                       Sign Up
-                    </MenuItem>
+                    </ChakraMenuItem>
                   </>
                 )}
-              </MenuList>
-            </Menu>
+              </ChakraMenuList>
+            </ChakraMenu>
           </Box>
         </Flex>
       </Container>

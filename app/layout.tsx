@@ -1,37 +1,35 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// app/layout.tsx
+
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from './providers';
-import Navbar from './components/Navbar';
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { Providers } from "./providers";
+import Navbar from "./components/Navbar";
+import { Box } from "@chakra-ui/react";
+import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "PromptVault - Store and Manage Your AI Prompts",
-  description: "Organize, store, and manage your AI prompts in one secure place",
+  title: "PromptVault",
+  description: "Manage and organize your AI prompts",
 };
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" className={inter.className}>
+      <body>
         <Providers>
           <Navbar />
-          <main className="min-h-screen bg-gray-50">{children}</main>
+          <Box as="main" minH="calc(100vh - 72px)" bg="gray.50">
+            {children}
+          </Box>
         </Providers>
       </body>
     </html>
