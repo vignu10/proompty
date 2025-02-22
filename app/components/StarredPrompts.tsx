@@ -109,11 +109,26 @@ export default function StarredPrompts({ userId }: StarredPromptsProps) {
                   console.error("Error forking prompt:", error);
                 }
               }}
-              onView={function (promptId: string): void {
-                throw new Error("Function not implemented.");
+              onView={(promptId: string) => {
+                // TODO: Implement view functionality
+                console.log('View prompt:', promptId);
               }}
-              onEdit={function (promptId: string): void {
-                throw new Error("Function not implemented.");
+              onEdit={(promptId: string) => {
+                // TODO: Implement edit functionality
+                console.log('Edit prompt:', promptId);
+              }}
+              onDelete={async (promptId: string) => {
+                try {
+                  const response = await fetch(`/api/prompts/${promptId}`, {
+                    method: 'DELETE',
+                  });
+                  if (!response.ok) {
+                    throw new Error('Failed to delete prompt');
+                  }
+                  setPrompts((prev) => prev.filter((p) => p.id !== promptId));
+                } catch (error) {
+                  console.error('Error deleting prompt:', error);
+                }
               }}
             />
           ))}

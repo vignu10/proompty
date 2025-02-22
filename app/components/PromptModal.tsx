@@ -46,7 +46,14 @@ interface PromptModalProps {
   onFork?: (promptId: string) => Promise<void>;
 }
 
-export default function PromptModal({ isOpen, onClose, prompt, currentUserId, onStar, onFork }: PromptModalProps) {
+export default function PromptModal({
+  isOpen,
+  onClose,
+  prompt,
+  currentUserId,
+  onStar,
+  onFork,
+}: PromptModalProps) {
   const toast = useToast();
 
   if (!prompt) return null;
@@ -69,7 +76,9 @@ export default function PromptModal({ isOpen, onClose, prompt, currentUserId, on
     try {
       await onStar(prompt.id);
       toast({
-        title: prompt.starredBy.includes(currentUserId) ? "Removed from starred" : "Added to starred",
+        title: prompt.starredBy.includes(currentUserId)
+          ? "Removed from starred"
+          : "Added to starred",
         status: "success",
         duration: 2000,
         isClosable: true,
@@ -94,24 +103,20 @@ export default function PromptModal({ isOpen, onClose, prompt, currentUserId, on
         duration: 2000,
         isClosable: true,
       });
-    } catch(error) {
+    } catch (error) {
       toast({
         title: "Failed to fork prompt",
         status: "error",
         duration: 2000,
         isClosable: true,
       });
-    };
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">
       <ModalOverlay backdropFilter="blur(10px)" />
-      <ModalContent
-        bg="gray.900"
-        borderColor="whiteAlpha.200"
-        boxShadow="xl"
-      >
+      <ModalContent bg="gray.900" borderColor="whiteAlpha.200" boxShadow="xl">
         <Box
           position="sticky"
           top={0}
@@ -121,11 +126,15 @@ export default function PromptModal({ isOpen, onClose, prompt, currentUserId, on
           p={4}
         >
           <Flex justify="space-between" align="center">
-            <Heading size="lg" color="whiteAlpha.900">{prompt.title}</Heading>
+            <Heading size="lg" color="whiteAlpha.900">
+              {prompt.title}
+            </Heading>
             <HStack spacing={2}>
               {currentUserId && !isOwnPrompt && (
                 <>
-                  <Tooltip label={isStarred ? "Remove from starred" : "Add to starred"}>
+                  <Tooltip
+                    label={isStarred ? "Remove from starred" : "Add to starred"}
+                  >
                     <IconButton
                       aria-label="Star prompt"
                       icon={<StarIcon />}
@@ -149,7 +158,7 @@ export default function PromptModal({ isOpen, onClose, prompt, currentUserId, on
                 <IconButton
                   aria-label="Copy prompt"
                   icon={<CopyIcon />}
-                  colorScheme="whiteAlpha"
+                  colorScheme="white"
                   variant="ghost"
                   onClick={handleCopy}
                 />
@@ -168,7 +177,9 @@ export default function PromptModal({ isOpen, onClose, prompt, currentUserId, on
             )}
 
             <Box bg="whiteAlpha.100" p={4} borderRadius="md">
-              <Text whiteSpace="pre-wrap" color="whiteAlpha.900">{prompt.content}</Text>
+              <Text whiteSpace="pre-wrap" color="whiteAlpha.900">
+                {prompt.content}
+              </Text>
             </Box>
 
             <HStack wrap="wrap" spacing={2}>

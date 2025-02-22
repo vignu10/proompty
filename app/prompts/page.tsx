@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import Fuse from 'fuse.js';
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
@@ -67,6 +68,20 @@ export default function PromptsPage() {
   const { user, token } = useAuth();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filteredPrompts, setFilteredPrompts] = useState<Prompt[]>([]);
+  const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Configure Fuse instance with search options
+  const fuse = useMemo(() => new Fuse(allPrompts, {
+    keys: [
+      { name: 'title', weight: 0.7 },
+      { name: 'content', weight: 0.5 },
+      { name: 'tags', weight: 0.3 }
+    ],
+    threshold: 0.4,
+    includeScore: true,
+    shouldSort: true,
+  }), [allPrompts]);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibility, setVisibility] = useState<PromptVisibility>("all");
   const [loading, setLoading] = useState(true);
@@ -91,7 +106,29 @@ export default function PromptsPage() {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
+  // Fetch all prompts for search functionality
+  const fetchAllPrompts = useCallback(async () => {
+    try {
+      const queryParams = new URLSearchParams({ visibility });
+      const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch all prompts");
+      }
+
+      const data = await response.json();
+      setAllPrompts(data.prompts);
+    } catch (err) {
+      console.error("Error fetching all prompts:", err);
+    }
+  }, [visibility, token]);
+
+  // Fetch paginated prompts
   const fetchPrompts = useCallback(async () => {
+    if (isSearching) return; // Don't fetch when searching
+
     try {
       const queryParams = new URLSearchParams({
         visibility,
@@ -100,11 +137,7 @@ export default function PromptsPage() {
       });
 
       const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!response.ok) {
@@ -140,13 +173,47 @@ export default function PromptsPage() {
     }
   }, []); // Only run on mount
 
+  // Handle search with Fuse.js and pagination
   useEffect(() => {
+    const hasSearchQuery = searchQuery.trim().length > 0;
+    setIsSearching(hasSearchQuery);
+
+    if (hasSearchQuery) {
+      const searchResults = fuse.search(searchQuery);
+      const results = searchResults.map(result => result.item);
+      
+      setTotalPrompts(results.length);
+      setTotalPages(Math.ceil(results.length / pageSize));
+
+      // Apply pagination to search results
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      setFilteredPrompts(results.slice(start, end));
+    } else {
+      // When not searching, rely on server-side pagination
+      fetchPrompts();
+    }
+  }, [searchQuery, fuse, currentPage, pageSize]);
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Fetch all prompts when visibility changes
+  useEffect(() => {
+    fetchAllPrompts();
+  }, [visibility, fetchAllPrompts]);
+
+  useEffect(() => {
+    setLoading(true);
     if (visibility === "private") {
       router.push("/prompts?filter=private", undefined);
     } else {
       router.push("/prompts", undefined);
     }
     setCurrentPage(1); // Reset to first page when visibility changes
+    fetchPrompts();
   }, [visibility, router]);
 
   useEffect(() => {
@@ -218,25 +285,47 @@ export default function PromptsPage() {
     <>
       <Container {...containerStyles}>
         <VStack spacing={8} align="stretch">
-          <Flex justify="space-between" align="center" flexWrap="wrap" gap={4}>
-            <Box>
-              <Heading size="lg" mb={2} className="gradient-text">
-                {visibility === "public"
-                  ? "Public Prompts"
-                  : visibility === "private"
-                  ? "My Prompts"
-                  : "All Prompts"}
-              </Heading>
-              <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
-                {prompts.length}{" "}
-                {visibility === "private"
-                  ? "private prompts"
-                  : visibility === "public"
-                  ? "public prompts"
-                  : "total prompts"}
-              </Text>
-            </Box>
-            <HStack spacing={4} wrap="wrap">
+          <VStack spacing={6} width="100%">
+            <Flex justify="space-between" align="center" width="100%" flexWrap="wrap" gap={4}>
+              <Box>
+                <Heading size="lg" mb={2} className="gradient-text">
+                  {visibility === "public"
+                    ? "Public Prompts"
+                    : visibility === "private"
+                    ? "My Prompts"
+                    : "All Prompts"}
+                </Heading>
+                <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
+                  {totalPrompts}{" "}
+                  {visibility === "private"
+                    ? "private prompts"
+                    : visibility === "public"
+                    ? "public prompts"
+                    : "total prompts"}
+                </Text>
+              </Box>
+              {user && (
+                <Button
+                  leftIcon={<AddIcon />}
+                  className="button-primary"
+                  onClick={() => router.push("/prompts/new")}
+                >
+                  Create Prompt
+                </Button>
+              )}
+            </Flex>
+
+            <Flex width="100%" gap={4} align="center">
+              <Box flex={1}>
+                <SearchBar
+                  value={searchQuery}
+                  onChange={(value) => {
+                    setSearchQuery(value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search by title or content..."
+                />
+              </Box>
               <Box className="select-container" minW="150px">
                 <select
                   className="select-field"
@@ -254,19 +343,10 @@ export default function PromptsPage() {
                   )}
                 </select>
               </Box>
-              {user && (
-                <Button
-                  leftIcon={<AddIcon />}
-                  className="button-primary"
-                  onClick={() => router.push("/prompts/new")}
-                >
-                  Create Prompt
-                </Button>
-              )}
-            </HStack>
-          </Flex>
+            </Flex>
+          </VStack>
 
-          {prompts.length === 0 ? (
+          {filteredPrompts.length === 0 ? (
             <Box
               textAlign="center"
               p={8}
@@ -303,15 +383,16 @@ export default function PromptsPage() {
               )}
             </Box>
           ) : (
-            <Grid
-              templateColumns={{
-                base: "1fr",
-                md: "repeat(2, 1fr)",
-                lg: "repeat(3, 1fr)",
-              }}
-              gap={6}
-            >
-              {prompts.map((prompt) => (
+            <VStack spacing={6}>
+              <Grid
+                templateColumns={{
+                  base: "1fr",
+                  md: "repeat(2, 1fr)",
+                  lg: "repeat(3, 1fr)",
+                }}
+                gap={6}
+              >
+                {filteredPrompts.map((prompt) => (
                 <PromptCard
                   key={prompt.id}
                   prompt={prompt}
@@ -447,7 +528,43 @@ export default function PromptsPage() {
                   }
                 />
               ))}
-            </Grid>
+              </Grid>
+
+              {filteredPrompts.length > 0 && (
+                <Box>
+                  <HStack spacing={2} justify="center" pt={4}>
+                    <Button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      isDisabled={currentPage === 1}
+                      variant="outline"
+                      size="sm"
+                      colorScheme="blue"
+                    >
+                      Previous
+                    </Button>
+                    
+                    <Text fontSize="sm" color="whiteAlpha.800">
+                      Page {currentPage} of {totalPages}
+                    </Text>
+
+                    <Button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      isDisabled={currentPage === totalPages}
+                      variant="outline"
+                      size="sm"
+                      colorScheme="blue"
+                    >
+                      Next
+                    </Button>
+                  </HStack>
+
+                  <Text fontSize="sm" color="whiteAlpha.700" textAlign="center" mt={2}>
+                    {searchQuery.trim() ? 'Found' : 'Showing'} {totalPrompts > 0 ? `${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, totalPrompts)} of ${totalPrompts}` : '0'} prompts
+                    {searchQuery.trim() && ' matching your search'}
+                  </Text>
+                </Box>
+              )}
+            </VStack>
           )}
 
           <AlertDialog

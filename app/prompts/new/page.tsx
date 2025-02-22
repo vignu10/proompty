@@ -102,8 +102,8 @@ export default function NewPromptPage() {
       <Container maxW="container.md" py={12}>
         <VStack spacing={8} align="stretch">
           <Box textAlign="center">
-            <Heading 
-              size="xl" 
+            <Heading
+              size="xl"
               mb={3}
               bgGradient="linear(to-r, neon.blue, neon.purple)"
               bgClip="text"
@@ -134,7 +134,8 @@ export default function NewPromptPage() {
               left: 0,
               right: 0,
               height: "1px",
-              background: "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
+              background:
+                "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
             }}
             _after={{
               content: '""',
@@ -143,7 +144,8 @@ export default function NewPromptPage() {
               left: 0,
               right: 0,
               height: "1px",
-              background: "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
+              background:
+                "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
             }}
           >
             <Stack spacing={6}>
@@ -154,6 +156,7 @@ export default function NewPromptPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Enter a descriptive title"
                   size="lg"
+                  maxLength={20}
                   bg="space.navy"
                   borderColor="whiteAlpha.200"
                   color="whiteAlpha.900"
@@ -266,8 +269,8 @@ export default function NewPromptPage() {
               </FormControl>
 
               <HStack spacing={4} justify="flex-end">
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={() => router.push("/prompts")}
                   color="whiteAlpha.900"
                   _hover={{

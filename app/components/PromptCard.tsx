@@ -10,8 +10,15 @@ import {
   IconButton,
   useColorModeValue,
   Tooltip,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  Button,
+  Center,
+  VStack,
 } from "@chakra-ui/react";
-import { StarIcon, RepeatIcon, ViewIcon, EditIcon } from "@chakra-ui/icons";
+import { StarIcon, RepeatIcon, EditIcon, DeleteIcon } from "@chakra-ui/icons";
 
 interface Prompt {
   id: string;
@@ -36,68 +43,84 @@ interface PromptCardProps {
   onFork?: (promptId: string) => Promise<void>;
   onView: (promptId: string) => void;
   onEdit: (promptId: string) => void;
+  onDelete?: (promptId: string) => Promise<void>;
 }
 
-export default function PromptCard({ prompt, currentUserId, onStar, onFork, onView, onEdit }: PromptCardProps) {
+export default function PromptCard({ prompt, currentUserId, onStar, onFork, onView, onEdit, onDelete }: PromptCardProps) {
   const bgColor = useColorModeValue("white", "gray.800");
   const isStarred = prompt.starredBy.includes(currentUserId);
   const isOwnPrompt = currentUserId === prompt.userId;
 
   return (
     <Box
+      as="article"
       p={5}
       shadow="md"
       borderWidth="1px"
       borderRadius="lg"
       bg={bgColor}
       position="relative"
+      onClick={() => onView(prompt.id)}
+      cursor="pointer"
+      _hover={{ shadow: 'lg' }}
     >
-      <HStack justify="space-between" align="start" mb={2}>
-        <Heading size="md">{prompt.title}</Heading>
-        <HStack spacing={2}>
-          <Tooltip label="View details">
-            <IconButton
-              aria-label="View prompt"
-              icon={<ViewIcon />}
-              colorScheme="blue"
-              onClick={() => onView(prompt.id)}
-            />
-          </Tooltip>
-          {isOwnPrompt && (
-            <Tooltip label="Edit prompt">
-              <IconButton
-                aria-label="Edit prompt"
-                icon={<EditIcon />}
-                colorScheme="green"
-                onClick={() => onEdit(prompt.id)}
-              />
-            </Tooltip>
-          )}
-          {!isOwnPrompt && (
-            <>
-              <Tooltip label={isStarred ? "Remove from starred" : "Add to starred"}>
+      <Box mb={6} position="relative">
+        <Heading size="md" pr={24}>{prompt.title}</Heading>
+        
+        <Box 
+          position="absolute" 
+          top={0} 
+          right={0} 
+          onClick={(e) => e.stopPropagation()}
+        >
+          <HStack spacing={1}>
+            {isOwnPrompt ? (
+              <>
+                <IconButton
+                  aria-label="Edit prompt"
+                  icon={<EditIcon />}
+                  size="sm"
+                  colorScheme="green"
+                  variant="ghost"
+                  onClick={() => onEdit(prompt.id)}
+                />
+                {onDelete && (
+                  <IconButton
+                    aria-label="Delete prompt"
+                    icon={<DeleteIcon />}
+                    size="sm"
+                    colorScheme="red"
+                    variant="ghost"
+                    onClick={() => onDelete(prompt.id)}
+                  />
+                )}
+              </>
+            ) : (
+              <>
                 <IconButton
                   aria-label={isStarred ? "Unstar prompt" : "Star prompt"}
                   icon={<StarIcon />}
+                  size="sm"
                   colorScheme={isStarred ? "yellow" : "gray"}
+                  variant="ghost"
                   onClick={() => onStar(prompt.id)}
                 />
-              </Tooltip>
-              {onFork && (
-                <Tooltip label="Fork this prompt">
+                {onFork && (
                   <IconButton
-                    aria-label="Fork prompt"
+                    aria-label="Clone prompt"
                     icon={<RepeatIcon />}
+                    size="sm"
                     colorScheme="gray"
+                    variant="ghost"
                     onClick={() => onFork(prompt.id)}
                   />
-                </Tooltip>
-              )}
-            </>
-          )}
-        </HStack>
-      </HStack>
-      
+                )}
+              </>
+            )}
+          </HStack>
+        </Box>
+      </Box>
+
       {prompt.originalPromptId && (
         <Text fontSize="sm" color="gray.500" mb={2}>
           Forked from another prompt
@@ -108,17 +131,19 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
         {prompt.content}
       </Text>
 
-      <HStack spacing={2} wrap="wrap">
-        {prompt.tags.map((tag) => (
-          <Tag key={tag} size="sm" colorScheme="blue">
-            <TagLabel>{tag}</TagLabel>
-          </Tag>
-        ))}
-      </HStack>
+      <Box mt="auto">
+        <HStack spacing={2} wrap="wrap" mb={3}>
+          {prompt.tags.map((tag) => (
+            <Tag key={tag} size="sm" colorScheme="blue">
+              <TagLabel>{tag}</TagLabel>
+            </Tag>
+          ))}
+        </HStack>
 
-      <Text fontSize="sm" color="gray.500" mt={2}>
-        By {prompt.user.name || prompt.user.email}
-      </Text>
+        <Text fontSize="sm" color="gray.500">
+          By {prompt.user.name || prompt.user.email}
+        </Text>
+      </Box>
     </Box>
   );
 }
