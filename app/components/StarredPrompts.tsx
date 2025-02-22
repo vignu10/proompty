@@ -109,6 +109,12 @@ export default function StarredPrompts({ userId }: StarredPromptsProps) {
                   console.error("Error forking prompt:", error);
                 }
               }}
+              onView={function (promptId: string): void {
+                throw new Error("Function not implemented.");
+              }}
+              onEdit={function (promptId: string): void {
+                throw new Error("Function not implemented.");
+              }}
             />
           ))}
         </SimpleGrid>

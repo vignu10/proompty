@@ -47,11 +47,10 @@ export async function PUT(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { title, content, category, tags } = await request.json();
+    const { title, content, tags } = await request.json();
     const result = await PromptController.updatePrompt(params.id, {
       title,
       content,
-      category,
       tags,
     });
 
