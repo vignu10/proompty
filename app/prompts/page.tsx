@@ -418,6 +418,38 @@ export default function PromptsPage() {
                   onEdit={(promptId) => {
                     router.push(`/prompts/${promptId}/edit`);
                   }}
+                  onDelete={async (promptId) => {
+                    if (!user) return;
+                    
+                    try {
+                      const response = await fetch(`/api/prompts/${promptId}`, {
+                        method: 'DELETE',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                        },
+                      });
+
+                      if (!response.ok) {
+                        throw new Error('Failed to delete prompt');
+                      }
+
+                      setPrompts(prompts.filter(p => p.id !== promptId));
+                      toast({
+                        title: 'Prompt deleted',
+                        status: 'success',
+                        duration: 3000,
+                        isClosable: true,
+                      });
+                    } catch (error) {
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to delete prompt',
+                        status: 'error',
+                        duration: 3000,
+                        isClosable: true,
+                      });
+                    }
+                  }}
                   onStar={async (promptId) => {
                     if (!user) {
                       toast({
