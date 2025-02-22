@@ -80,8 +80,8 @@ export class Prompt {
           whereInput.isPublic = true;
           break;
         case "private":
+          // Show all prompts by the user (both public and private)
           whereInput.userId = userId;
-          whereInput.isPublic = false;
           break;
         case "starred":
           whereInput.starredBy = {

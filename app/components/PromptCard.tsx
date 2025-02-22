@@ -62,9 +62,13 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
       position="relative"
       onClick={() => onView(prompt.id)}
       cursor="pointer"
-      _hover={{ shadow: 'lg' }}
+      height="100%"
+      display="flex"
+      flexDirection="column"
+      _hover={{ shadow: 'lg', transform: 'translateY(-2px)' }}
+      transition="all 0.2s"
     >
-      <Box mb={6} position="relative">
+      <Box mb={6} position="relative" flex="none">
         <Heading size="md" pr={24}>{prompt.title}</Heading>
         
         <Box 
@@ -127,11 +131,11 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
         </Text>
       )}
 
-      <Text noOfLines={3} mb={4}>
+      <Text noOfLines={3} mb={4} flex="1">
         {prompt.content}
       </Text>
 
-      <Box mt="auto">
+      <Box mt="auto" flex="none">
         <HStack spacing={2} wrap="wrap" mb={3}>
           {prompt.tags.map((tag) => (
             <Tag key={tag} size="sm" colorScheme="blue">

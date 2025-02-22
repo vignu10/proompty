@@ -109,7 +109,8 @@ export default function PromptsPage() {
   // Fetch all prompts for search functionality
   const fetchAllPrompts = useCallback(async () => {
     try {
-      const queryParams = new URLSearchParams({ visibility });
+      const queryParams = new URLSearchParams();
+      queryParams.set('visibility', visibility);
       const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -130,11 +131,16 @@ export default function PromptsPage() {
     if (isSearching) return; // Don't fetch when searching
 
     try {
-      const queryParams = new URLSearchParams({
-        visibility,
-        page: currentPage.toString(),
-        pageSize: pageSize.toString(),
-      });
+      const queryParams = new URLSearchParams();
+      
+      queryParams.set('page', currentPage.toString());
+      queryParams.set('pageSize', pageSize.toString());
+      
+      if (visibility === "private" && user?.email) {
+        queryParams.set('userId', user.email);
+      } else {
+        queryParams.set('visibility', visibility);
+      }
 
       const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -208,7 +214,9 @@ export default function PromptsPage() {
   useEffect(() => {
     setLoading(true);
     if (visibility === "private") {
-      router.push("/prompts?filter=private", undefined);
+      router.push("/prompts?filter=my-prompts", undefined);
+    } else if (visibility === "public") {
+      router.push("/prompts?filter=public", undefined);
     } else {
       router.push("/prompts", undefined);
     }
@@ -298,7 +306,7 @@ export default function PromptsPage() {
                 <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
                   {totalPrompts}{" "}
                   {visibility === "private"
-                    ? "private prompts"
+                    ? "of your prompts"
                     : visibility === "public"
                     ? "public prompts"
                     : "total prompts"}
@@ -387,10 +395,11 @@ export default function PromptsPage() {
               <Grid
                 templateColumns={{
                   base: "1fr",
-                  md: "repeat(2, 1fr)",
-                  lg: "repeat(3, 1fr)",
+                  md: "repeat(2, minmax(0, 1fr))",
+                  lg: "repeat(3, minmax(0, 1fr))",
                 }}
                 gap={6}
+                width="100%"
               >
                 {filteredPrompts.map((prompt) => (
                 <PromptCard
