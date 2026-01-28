@@ -20,6 +20,7 @@ import {
   TagLabel,
 } from "@chakra-ui/react";
 import { CopyIcon, StarIcon, RepeatIcon } from "@chakra-ui/icons";
+import AISuggestions from "./AISuggestions";
 
 interface Prompt {
   id: string;
@@ -193,6 +194,8 @@ export default function PromptModal({
             <Text fontSize="sm" color="whiteAlpha.700">
               Created by {prompt.user.name || prompt.user.email}
             </Text>
+
+            {currentUserId && <AISuggestions promptId={prompt.id} />}
           </VStack>
         </ModalBody>
       </ModalContent>

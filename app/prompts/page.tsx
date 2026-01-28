@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import Fuse from 'fuse.js';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
@@ -34,7 +33,7 @@ import {
   AlertDialogContent,
   AlertDialogOverlay,
 } from "@chakra-ui/react";
-import SearchBar from "../components/SearchBar";
+import SearchBar, { SearchMode } from "../components/SearchBar";
 import PromptCard from "../components/PromptCard";
 import PromptModal from "../components/PromptModal";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
@@ -68,20 +67,8 @@ export default function PromptsPage() {
   const { user, token } = useAuth();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filteredPrompts, setFilteredPrompts] = useState<Prompt[]>([]);
-  const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-
-  // Configure Fuse instance with search options
-  const fuse = useMemo(() => new Fuse(allPrompts, {
-    keys: [
-      { name: 'title', weight: 0.7 },
-      { name: 'content', weight: 0.5 },
-      { name: 'tags', weight: 0.3 }
-    ],
-    threshold: 0.4,
-    includeScore: true,
-    shouldSort: true,
-  }), [allPrompts]);
+  const [searchMode, setSearchMode] = useState<SearchMode>("hybrid");
   const [searchQuery, setSearchQuery] = useState("");
   const [visibility, setVisibility] = useState<PromptVisibility>("all");
   const [loading, setLoading] = useState(true);
@@ -93,6 +80,7 @@ export default function PromptsPage() {
   const pageSize = 10;
   const toast = useToast();
   const router = useRouter();
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const {
     isOpen: isDeleteOpen,
     onOpen: onDeleteOpen,
@@ -106,40 +94,18 @@ export default function PromptsPage() {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
-  // Fetch all prompts for search functionality
-  const fetchAllPrompts = useCallback(async () => {
-    try {
-      const queryParams = new URLSearchParams();
-      queryParams.set('visibility', visibility);
-      const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch all prompts");
-      }
-
-      const data = await response.json();
-      setAllPrompts(data.prompts);
-    } catch (err) {
-      console.error("Error fetching all prompts:", err);
-    }
-  }, [visibility, token]);
-
   // Fetch paginated prompts
   const fetchPrompts = useCallback(async () => {
-    if (isSearching) return; // Don't fetch when searching
-
     try {
       const queryParams = new URLSearchParams();
-      
-      queryParams.set('page', currentPage.toString());
-      queryParams.set('pageSize', pageSize.toString());
-      
+
+      queryParams.set("page", currentPage.toString());
+      queryParams.set("pageSize", pageSize.toString());
+
       if (visibility === "private" && user?.email) {
-        queryParams.set('userId', user.email);
+        queryParams.set("userId", user.email);
       } else {
-        queryParams.set('visibility', visibility);
+        queryParams.set("visibility", visibility);
       }
 
       const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
@@ -171,6 +137,74 @@ export default function PromptsPage() {
     }
   }, [token, visibility, currentPage, user, toast]);
 
+  // API-based search with debounce
+  const performSearch = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        setIsSearching(false);
+        fetchPrompts();
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const queryParams = new URLSearchParams({
+          q: query,
+          mode: searchMode,
+          limit: "20",
+        });
+
+        const response = await fetch(`/api/search?${queryParams.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!response.ok) {
+          throw new Error("Search failed");
+        }
+
+        const data = await response.json();
+        setFilteredPrompts(data.prompts);
+        setTotalPrompts(data.total);
+        setTotalPages(1);
+        setCurrentPage(1);
+      } catch (err) {
+        console.error("Search error:", err);
+        toast({
+          title: "Search failed",
+          description: "Could not perform search. Showing all prompts.",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
+        fetchPrompts();
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [searchMode, token, toast, fetchPrompts]
+  );
+
+  // Debounced search handler
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+      searchTimerRef.current = setTimeout(() => {
+        performSearch(value);
+      }, 300);
+    },
+    [performSearch]
+  );
+
+  // Re-search when mode changes
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      performSearch(searchQuery);
+    }
+  }, [searchMode]);
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const filterParam = urlParams.get("filter");
@@ -179,37 +213,12 @@ export default function PromptsPage() {
     }
   }, []); // Only run on mount
 
-  // Handle search with Fuse.js and pagination
+  // Fetch prompts when not searching
   useEffect(() => {
-    const hasSearchQuery = searchQuery.trim().length > 0;
-    setIsSearching(hasSearchQuery);
-
-    if (hasSearchQuery) {
-      const searchResults = fuse.search(searchQuery);
-      const results = searchResults.map(result => result.item);
-      
-      setTotalPrompts(results.length);
-      setTotalPages(Math.ceil(results.length / pageSize));
-
-      // Apply pagination to search results
-      const start = (currentPage - 1) * pageSize;
-      const end = start + pageSize;
-      setFilteredPrompts(results.slice(start, end));
-    } else {
-      // When not searching, rely on server-side pagination
+    if (!searchQuery.trim()) {
       fetchPrompts();
     }
-  }, [searchQuery, fuse, currentPage, pageSize]);
-
-  // Reset to first page when search query changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  // Fetch all prompts when visibility changes
-  useEffect(() => {
-    fetchAllPrompts();
-  }, [visibility, fetchAllPrompts]);
+  }, [fetchPrompts]);
 
   useEffect(() => {
     setLoading(true);
@@ -220,13 +229,10 @@ export default function PromptsPage() {
     } else {
       router.push("/prompts", undefined);
     }
-    setCurrentPage(1); // Reset to first page when visibility changes
+    setCurrentPage(1);
+    setSearchQuery("");
     fetchPrompts();
   }, [visibility, router]);
-
-  useEffect(() => {
-    fetchPrompts();
-  }, [fetchPrompts]);
 
   const handleDeleteClick = (promptId: string) => {
     setSelectedPromptId(promptId);
@@ -294,7 +300,13 @@ export default function PromptsPage() {
       <Container {...containerStyles}>
         <VStack spacing={8} align="stretch">
           <VStack spacing={6} width="100%">
-            <Flex justify="space-between" align="center" width="100%" flexWrap="wrap" gap={4}>
+            <Flex
+              justify="space-between"
+              align="center"
+              width="100%"
+              flexWrap="wrap"
+              gap={4}
+            >
               <Box>
                 <Heading size="lg" mb={2} className="gradient-text">
                   {visibility === "public"
@@ -303,7 +315,11 @@ export default function PromptsPage() {
                     ? "My Prompts"
                     : "All Prompts"}
                 </Heading>
-                <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
+                <Text
+                  color="whiteAlpha.700"
+                  fontSize="lg"
+                  letterSpacing="wide"
+                >
                   {totalPrompts}{" "}
                   {visibility === "private"
                     ? "of your prompts"
@@ -327,11 +343,11 @@ export default function PromptsPage() {
               <Box flex={1}>
                 <SearchBar
                   value={searchQuery}
-                  onChange={(value) => {
-                    setSearchQuery(value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search by title or content..."
+                  onChange={handleSearchChange}
+                  placeholder="Search by title, content, or meaning..."
+                  searchMode={searchMode}
+                  onSearchModeChange={setSearchMode}
+                  isSearching={isSearching}
                 />
               </Box>
               <Box className="select-container" minW="150px">
@@ -362,33 +378,38 @@ export default function PromptsPage() {
               className="prompt-card"
             >
               <Heading size="md" mb={4} className="gradient-text">
-                {visibility === "public"
+                {searchQuery.trim()
+                  ? "No Results Found"
+                  : visibility === "public"
                   ? "No Public Prompts Yet"
                   : visibility === "private"
                   ? "No Private Prompts Yet"
                   : "No Prompts Yet"}
               </Heading>
               <Text color="whiteAlpha.800" fontSize="lg" mb={6}>
-                {user
+                {searchQuery.trim()
+                  ? "Try adjusting your search query or switching search mode."
+                  : user
                   ? "Create your first prompt to get started!"
                   : "Sign in to create and manage your own prompts."}
               </Text>
-              {user ? (
-                <Button
-                  leftIcon={<AddIcon />}
-                  className="button-primary"
-                  onClick={() => router.push("/prompts/new")}
-                >
-                  Create First Prompt
-                </Button>
-              ) : (
-                <Button
-                  className="button-primary"
-                  onClick={() => router.push("/login")}
-                >
-                  Sign In
-                </Button>
-              )}
+              {!searchQuery.trim() &&
+                (user ? (
+                  <Button
+                    leftIcon={<AddIcon />}
+                    className="button-primary"
+                    onClick={() => router.push("/prompts/new")}
+                  >
+                    Create First Prompt
+                  </Button>
+                ) : (
+                  <Button
+                    className="button-primary"
+                    onClick={() => router.push("/login")}
+                  >
+                    Sign In
+                  </Button>
+                ))}
             </Box>
           ) : (
             <VStack spacing={6}>
@@ -402,180 +423,189 @@ export default function PromptsPage() {
                 width="100%"
               >
                 {filteredPrompts.map((prompt) => (
-                <PromptCard
-                  key={prompt.id}
-                  prompt={prompt}
-                  currentUserId={user?.id || ""}
-                  onView={(promptId) => {
-                    const selectedPrompt = prompts.find(
-                      (p) => p.id === promptId
-                    );
-                    if (selectedPrompt) {
-                      setSelectedPrompt(selectedPrompt);
-                      onViewOpen();
-                    }
-                  }}
-                  onEdit={(promptId) => {
-                    router.push(`/prompts/${promptId}/edit`);
-                  }}
-                  onDelete={async (promptId) => {
-                    if (!user) return;
-                    
-                    try {
-                      const response = await fetch(`/api/prompts/${promptId}`, {
-                        method: 'DELETE',
-                        headers: {
-                          'Authorization': `Bearer ${token}`,
-                        },
-                      });
-
-                      if (!response.ok) {
-                        throw new Error('Failed to delete prompt');
+                  <PromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    currentUserId={user?.id || ""}
+                    onView={(promptId) => {
+                      const found =
+                        filteredPrompts.find((p) => p.id === promptId) ||
+                        prompts.find((p) => p.id === promptId);
+                      if (found) {
+                        setSelectedPrompt(found);
+                        onViewOpen();
                       }
+                    }}
+                    onEdit={(promptId) => {
+                      router.push(`/prompts/${promptId}/edit`);
+                    }}
+                    onDelete={async (promptId) => {
+                      if (!user) return;
 
-                      setPrompts(prompts.filter(p => p.id !== promptId));
-                      toast({
-                        title: 'Prompt deleted',
-                        status: 'success',
-                        duration: 3000,
-                        isClosable: true,
-                      });
-                    } catch (error) {
-                      toast({
-                        title: 'Error',
-                        description: 'Failed to delete prompt',
-                        status: 'error',
-                        duration: 3000,
-                        isClosable: true,
-                      });
-                    }
-                  }}
-                  onStar={async (promptId) => {
-                    if (!user) {
-                      toast({
-                        title: "Please log in",
-                        description: "You need to be logged in to star prompts",
-                        status: "warning",
-                        duration: 3000,
-                        isClosable: true,
-                      });
-                      return;
-                    }
-
-                    try {
-                      const response = await fetch("/api/prompts", {
-                        method: "PUT",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({ promptId, action: "star" }),
-                      });
-
-                      if (!response.ok) {
-                        throw new Error("Failed to star prompt");
-                      }
-
-                      const updatedPrompt = await response.json();
-                      setPrompts(
-                        prompts.map((p) =>
-                          p.id === promptId ? updatedPrompt : p
-                        )
-                      );
-                      setFilteredPrompts(
-                        filteredPrompts.map((p) =>
-                          p.id === promptId ? updatedPrompt : p
-                        )
-                      );
-
-                      const isStarred = updatedPrompt.starredBy.includes(
-                        user.id
-                      );
-                      toast({
-                        title: isStarred
-                          ? "Prompt starred"
-                          : "Prompt unstarred",
-                        status: "success",
-                        duration: 2000,
-                        isClosable: true,
-                      });
-                    } catch (error) {
-                      toast({
-                        title: "Error",
-                        description: "Failed to star prompt",
-                        status: "error",
-                        duration: 3000,
-                        isClosable: true,
-                      });
-                    }
-                  }}
-                  onFork={
-                    prompt.isPublic
-                      ? async (promptId) => {
-                          if (!user) {
-                            toast({
-                              title: "Please log in",
-                              description:
-                                "You need to be logged in to fork prompts",
-                              status: "warning",
-                              duration: 3000,
-                              isClosable: true,
-                            });
-                            return;
+                      try {
+                        const response = await fetch(
+                          `/api/prompts/${promptId}`,
+                          {
+                            method: "DELETE",
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                            },
                           }
+                        );
 
-                          try {
-                            const response = await fetch("/api/prompts", {
-                              method: "PUT",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`,
-                              },
-                              body: JSON.stringify({
-                                promptId,
-                                action: "fork",
-                              }),
-                            });
+                        if (!response.ok) {
+                          throw new Error("Failed to delete prompt");
+                        }
 
-                            if (!response.ok) {
-                              throw new Error("Failed to fork prompt");
+                        setPrompts(prompts.filter((p) => p.id !== promptId));
+                        setFilteredPrompts(
+                          filteredPrompts.filter((p) => p.id !== promptId)
+                        );
+                        toast({
+                          title: "Prompt deleted",
+                          status: "success",
+                          duration: 3000,
+                          isClosable: true,
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to delete prompt",
+                          status: "error",
+                          duration: 3000,
+                          isClosable: true,
+                        });
+                      }
+                    }}
+                    onStar={async (promptId) => {
+                      if (!user) {
+                        toast({
+                          title: "Please log in",
+                          description:
+                            "You need to be logged in to star prompts",
+                          status: "warning",
+                          duration: 3000,
+                          isClosable: true,
+                        });
+                        return;
+                      }
+
+                      try {
+                        const response = await fetch("/api/prompts", {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ promptId, action: "star" }),
+                        });
+
+                        if (!response.ok) {
+                          throw new Error("Failed to star prompt");
+                        }
+
+                        const updatedPrompt = await response.json();
+                        setPrompts(
+                          prompts.map((p) =>
+                            p.id === promptId ? updatedPrompt : p
+                          )
+                        );
+                        setFilteredPrompts(
+                          filteredPrompts.map((p) =>
+                            p.id === promptId ? updatedPrompt : p
+                          )
+                        );
+
+                        const isStarred = updatedPrompt.starredBy.includes(
+                          user.id
+                        );
+                        toast({
+                          title: isStarred
+                            ? "Prompt starred"
+                            : "Prompt unstarred",
+                          status: "success",
+                          duration: 2000,
+                          isClosable: true,
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to star prompt",
+                          status: "error",
+                          duration: 3000,
+                          isClosable: true,
+                        });
+                      }
+                    }}
+                    onFork={
+                      prompt.isPublic
+                        ? async (promptId) => {
+                            if (!user) {
+                              toast({
+                                title: "Please log in",
+                                description:
+                                  "You need to be logged in to fork prompts",
+                                status: "warning",
+                                duration: 3000,
+                                isClosable: true,
+                              });
+                              return;
                             }
 
-                            const forkedPrompt = await response.json();
-                            setPrompts([forkedPrompt, ...prompts]);
-                            setFilteredPrompts([
-                              forkedPrompt,
-                              ...filteredPrompts,
-                            ]);
+                            try {
+                              const response = await fetch("/api/prompts", {
+                                method: "PUT",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  promptId,
+                                  action: "fork",
+                                }),
+                              });
 
-                            toast({
-                              title: "Prompt forked successfully",
-                              description: "You can find it in your prompts",
-                              status: "success",
-                              duration: 2000,
-                              isClosable: true,
-                            });
-                          } catch (error) {
-                            toast({
-                              title: "Error",
-                              description: "Failed to fork prompt",
-                              status: "error",
-                              duration: 3000,
-                              isClosable: true,
-                            });
+                              if (!response.ok) {
+                                throw new Error("Failed to fork prompt");
+                              }
+
+                              const forkedPrompt = await response.json();
+                              setPrompts([forkedPrompt, ...prompts]);
+                              setFilteredPrompts([
+                                forkedPrompt,
+                                ...filteredPrompts,
+                              ]);
+
+                              toast({
+                                title: "Prompt forked successfully",
+                                description: "You can find it in your prompts",
+                                status: "success",
+                                duration: 2000,
+                                isClosable: true,
+                              });
+                            } catch (error) {
+                              toast({
+                                title: "Error",
+                                description: "Failed to fork prompt",
+                                status: "error",
+                                duration: 3000,
+                                isClosable: true,
+                              });
+                            }
                           }
-                        }
-                      : undefined
-                  }
-                />
-              ))}
+                        : undefined
+                    }
+                  />
+                ))}
               </Grid>
 
-              {filteredPrompts.length > 0 && (
+              {filteredPrompts.length > 0 && !searchQuery.trim() && (
                 <Box>
                   <HStack spacing={2} justify="center" pt={4}>
                     <Button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(1, prev - 1))
+                      }
                       isDisabled={currentPage === 1}
                       variant="outline"
                       size="sm"
@@ -583,13 +613,17 @@ export default function PromptsPage() {
                     >
                       Previous
                     </Button>
-                    
+
                     <Text fontSize="sm" color="whiteAlpha.800">
                       Page {currentPage} of {totalPages}
                     </Text>
 
                     <Button
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(totalPages, prev + 1)
+                        )
+                      }
                       isDisabled={currentPage === totalPages}
                       variant="outline"
                       size="sm"
@@ -599,11 +633,33 @@ export default function PromptsPage() {
                     </Button>
                   </HStack>
 
-                  <Text fontSize="sm" color="whiteAlpha.700" textAlign="center" mt={2}>
-                    {searchQuery.trim() ? 'Found' : 'Showing'} {totalPrompts > 0 ? `${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, totalPrompts)} of ${totalPrompts}` : '0'} prompts
-                    {searchQuery.trim() && ' matching your search'}
+                  <Text
+                    fontSize="sm"
+                    color="whiteAlpha.700"
+                    textAlign="center"
+                    mt={2}
+                  >
+                    Showing{" "}
+                    {totalPrompts > 0
+                      ? `${(currentPage - 1) * pageSize + 1} - ${Math.min(
+                          currentPage * pageSize,
+                          totalPrompts
+                        )} of ${totalPrompts}`
+                      : "0"}{" "}
+                    prompts
                   </Text>
                 </Box>
+              )}
+
+              {searchQuery.trim() && filteredPrompts.length > 0 && (
+                <Text
+                  fontSize="sm"
+                  color="whiteAlpha.700"
+                  textAlign="center"
+                  mt={2}
+                >
+                  Found {totalPrompts} prompts matching your search
+                </Text>
               )}
             </VStack>
           )}

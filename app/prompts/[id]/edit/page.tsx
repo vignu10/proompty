@@ -23,6 +23,8 @@ import {
   TagCloseButton,
   Spinner,
 } from "@chakra-ui/react";
+import AIRefinePanel from "@/app/components/AIRefinePanel";
+import AISuggestions from "@/app/components/AISuggestions";
 
 interface Prompt {
   id: string;
@@ -98,6 +100,19 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
 
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleRefineApply = (data: { title: string; content: string; category: string; tags: string[] }) => {
+    setTitle(data.title);
+    setContent(data.content);
+    if (data.category) setCategory(data.category);
+    setTags(data.tags);
+    toast({
+      title: "AI refinement applied",
+      description: "Review the changes before saving",
+      status: "info",
+      duration: 3000,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -201,19 +216,19 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
               <HStack spacing={4}>
                 <Button
                   flex="1"
-                  variant={isPublic ? 'solid' : 'outline'}
+                  variant={isPublic ? "solid" : "outline"}
                   colorScheme="blue"
                   onClick={() => setIsPublic(true)}
-                  _hover={{ transform: 'translateY(-1px)' }}
+                  _hover={{ transform: "translateY(-1px)" }}
                 >
                   Public
                 </Button>
                 <Button
                   flex="1"
-                  variant={!isPublic ? 'solid' : 'outline'}
+                  variant={!isPublic ? "solid" : "outline"}
                   colorScheme="blue"
                   onClick={() => setIsPublic(false)}
-                  _hover={{ transform: 'translateY(-1px)' }}
+                  _hover={{ transform: "translateY(-1px)" }}
                 >
                   Private
                 </Button>
@@ -297,6 +312,10 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
             </HStack>
           </Stack>
         </Box>
+
+        <AIRefinePanel promptId={params.id} onApply={handleRefineApply} />
+
+        <AISuggestions promptId={params.id} />
       </VStack>
     </Container>
   );
