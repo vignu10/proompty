@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   try {
     // Parse and validate request body
     const body = await request.json();
-    const { title, content, tags, isPublic, promptId, action } = body;
+    const { title, content, tags, isPublic, category, promptId, action } = body;
 
     // Validate action type if provided
     if (action && !['create', 'fork'].includes(action)) {
@@ -153,6 +153,7 @@ export async function POST(request: Request) {
     const result = await PromptController.createPrompt({
       title: title.trim(),
       content: content.trim(),
+      category: category?.trim() || null,
       tags: Array.isArray(tags) ? tags.filter(tag => typeof tag === 'string' && tag.trim()) : [],
       userId: auth.userId,
       isPublic: Boolean(isPublic),

@@ -1,6 +1,6 @@
-import { PrismaClient, Prisma } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/app/lib/prisma";
+import { EmbeddingService } from "@/app/services/EmbeddingService";
 
 type UserSelect = {
   name: true;
@@ -29,6 +29,7 @@ type PromptWithUser = Prisma.PromptGetPayload<{
 export interface PromptData {
   title: string;
   content: string;
+  category?: string | null;
   tags?: string[];
   userId: string;
   isPublic?: boolean;
@@ -39,6 +40,7 @@ export interface PromptData {
 export interface PromptUpdateData {
   title?: string;
   content?: string;
+  category?: string | null;
   tags?: string[];
   isPublic?: boolean;
   starredBy?: string[];
@@ -111,6 +113,7 @@ export class Prompt {
     const createInput: Prisma.PromptUncheckedCreateInput = {
       title: data.title.trim(),
       content: data.content.trim(),
+      category: data.category?.trim() || null,
       tags: data.tags?.filter((tag) => tag?.trim()) || [],
       userId: data.userId,
       isPublic: data.isPublic ?? false,
@@ -118,10 +121,22 @@ export class Prompt {
       starredBy: data.starredBy || [],
     };
 
-    return prisma.prompt.create({
+    const prompt = await prisma.prompt.create({
       data: createInput,
       include: defaultInclude,
     });
+
+    // Fire-and-forget embedding generation
+    const text = EmbeddingService.preparePromptText(
+      prompt.title,
+      prompt.content,
+      prompt.tags
+    );
+    EmbeddingService.updatePromptEmbedding(prompt.id, text).catch((err) =>
+      console.error("Failed to generate embedding for prompt:", prompt.id, err)
+    );
+
+    return prompt;
   }
 
   static async update(
@@ -131,19 +146,37 @@ export class Prompt {
     const updateInput: Prisma.PromptUpdateInput = {
       ...(data.title && { title: data.title.trim() }),
       ...(data.content && { content: data.content.trim() }),
+      ...(data.category !== undefined && { category: data.category?.trim() || null }),
       ...(data.tags && { tags: data.tags.filter((tag) => tag?.trim()) }),
       ...(typeof data.isPublic === "boolean" && { isPublic: data.isPublic }),
       ...(data.starredBy && { starredBy: data.starredBy }),
     };
 
-    return prisma.prompt.update({
+    const prompt = await prisma.prompt.update({
       where: { id },
       data: updateInput,
       include: defaultInclude,
     });
+
+    // Re-generate embedding after update
+    const text = EmbeddingService.preparePromptText(
+      prompt.title,
+      prompt.content,
+      prompt.tags
+    );
+    EmbeddingService.updatePromptEmbedding(prompt.id, text).catch((err) =>
+      console.error("Failed to update embedding for prompt:", prompt.id, err)
+    );
+
+    return prompt;
   }
 
   static async delete(id: string): Promise<PromptWithUser> {
+    // Delete embedding (cascade should handle it, but be explicit)
+    EmbeddingService.deletePromptEmbedding(id).catch((err) =>
+      console.error("Failed to delete embedding for prompt:", id, err)
+    );
+
     return prisma.prompt.delete({
       where: { id },
       include: defaultInclude,
@@ -186,6 +219,7 @@ export class Prompt {
       select: {
         title: true,
         content: true,
+        category: true,
         tags: true,
       },
     });
@@ -197,6 +231,7 @@ export class Prompt {
     return this.create({
       title: `${sourcePrompt.title} (Fork)`,
       content: sourcePrompt.content,
+      category: sourcePrompt.category,
       tags: sourcePrompt.tags,
       userId: userId,
       isPublic: false,
