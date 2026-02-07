@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { EmbeddingService } from "@/app/services/EmbeddingService";
+import { cache } from "@/app/lib/cache";
+import { env } from "@/app/lib/env";
 
 type UserSelect = {
   name: true;
@@ -48,10 +50,19 @@ export interface PromptUpdateData {
 
 export class Prompt {
   static async findById(id: string): Promise<PromptWithUser | null> {
-    return prisma.prompt.findUnique({
+    const cacheKey = `prompt:${id}`;
+    const cached = await cache.get<PromptWithUser>(cacheKey);
+    if (cached) return cached;
+
+    const prompt = await prisma.prompt.findUnique({
       where: { id },
       include: defaultInclude,
     });
+
+    if (prompt) {
+      await cache.set(cacheKey, prompt, env.CACHE_TTL);
+    }
+    return prompt;
   }
 
   static async findByUser(
@@ -62,6 +73,11 @@ export class Prompt {
     tags: string[] = []
   ): Promise<{ prompts: PromptWithUser[]; total: number }> {
     const skip = (page - 1) * pageSize;
+
+    // Create cache key from query params
+    const cacheKey = `prompts:byUser:${userId ?? 'anon'}:${visibility}:${page}:${pageSize}:${tags.sort().join(',')}`;
+    const cached = await cache.get<{ prompts: PromptWithUser[]; total: number }>(cacheKey);
+    if (cached) return cached;
 
     let whereInput: Prisma.PromptWhereInput = {};
 
@@ -106,7 +122,9 @@ export class Prompt {
       prisma.prompt.count({ where: whereInput }),
     ]);
 
-    return { prompts, total };
+    const result = { prompts, total };
+    await cache.set(cacheKey, result, 300); // 5 minutes
+    return result;
   }
 
   static async create(data: PromptData): Promise<PromptWithUser> {
@@ -125,6 +143,9 @@ export class Prompt {
       data: createInput,
       include: defaultInclude,
     });
+
+    // Invalidate relevant caches
+    await cache.invalidatePrompts(data.userId);
 
     // Fire-and-forget embedding generation
     const text = EmbeddingService.preparePromptText(
@@ -158,6 +179,9 @@ export class Prompt {
       include: defaultInclude,
     });
 
+    // Invalidate caches
+    await cache.invalidatePrompt(id, prompt.userId);
+
     // Re-generate embedding after update
     const text = EmbeddingService.preparePromptText(
       prompt.title,
@@ -177,10 +201,15 @@ export class Prompt {
       console.error("Failed to delete embedding for prompt:", id, err)
     );
 
-    return prisma.prompt.delete({
+    const prompt = await prisma.prompt.delete({
       where: { id },
       include: defaultInclude,
     });
+
+    // Invalidate caches
+    await cache.invalidatePrompt(id, prompt.userId);
+
+    return prompt;
   }
 
   static async toggleStar(
@@ -189,7 +218,7 @@ export class Prompt {
   ): Promise<PromptWithUser> {
     const prompt = await prisma.prompt.findUnique({
       where: { id: promptId },
-      select: { starredBy: true },
+      select: { starredBy: true, userId: true },
     });
 
     if (!prompt) {
@@ -199,7 +228,7 @@ export class Prompt {
     const starredBy = prompt.starredBy || [];
     const isStarred = starredBy.includes(userId);
 
-    return prisma.prompt.update({
+    const updated = await prisma.prompt.update({
       where: { id: promptId },
       data: {
         starredBy: isStarred
@@ -208,6 +237,12 @@ export class Prompt {
       },
       include: defaultInclude,
     });
+
+    // Invalidate caches
+    await cache.invalidatePrompt(promptId, prompt.userId);
+    await cache.invalidatePrompts(userId);
+
+    return updated;
   }
 
   static async forkPrompt(

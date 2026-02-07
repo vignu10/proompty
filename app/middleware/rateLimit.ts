@@ -41,7 +41,7 @@ export async function withRateLimit(
   customIdentifier?: string
 ): Promise<NextResponse | null> {
   const identifier = customIdentifier || getClientIdentifier(request);
-  const result = checkRateLimit(identifier, category);
+  const result = await checkRateLimit(identifier, category);
   const headers = getRateLimitHeaders(result);
 
   if (!result.allowed) {
@@ -67,13 +67,13 @@ export async function withRateLimit(
 /**
  * Add rate limit headers to a successful response
  */
-export function addRateLimitHeaders(
+export async function addRateLimitHeaders(
   response: NextResponse,
   request: Request,
   category: RateLimitCategory = 'default'
-): NextResponse {
+): Promise<NextResponse> {
   const identifier = getClientIdentifier(request);
-  const result = checkRateLimit(identifier, category);
+  const result = await checkRateLimit(identifier, category);
   const headers = getRateLimitHeaders(result);
 
   // Note: We already consumed a token in withRateLimit, so remaining is accurate
@@ -96,6 +96,6 @@ export function rateLimited<T extends Request>(
     if (rateLimitResponse) return rateLimitResponse;
 
     const response = await handler(request, context);
-    return addRateLimitHeaders(response, request, category);
+    return await addRateLimitHeaders(response, request, category);
   };
 }

@@ -1,5 +1,7 @@
 import { EmbeddingService } from '@/app/services/EmbeddingService';
 import { prisma } from '@/app/lib/prisma';
+import { cache } from '@/app/lib/cache';
+import { createHash } from 'crypto';
 
 interface SearchResult {
   id: string;
@@ -17,12 +19,26 @@ interface SearchResult {
 }
 
 export class SearchController {
+  /**
+   * Create a consistent hash for search query caching
+   */
+  private static hashSearchQuery(query: string, mode: string, limit: number, userId: string | null): string {
+    const str = JSON.stringify({ query, mode, limit, userId });
+    return createHash('md5').update(str).digest('hex');
+  }
+
   static async semanticSearch(
     query: string,
     userId: string | null,
     limit: number = 10
   ): Promise<{ data: SearchResult[]; status: number } | { error: string; status: number }> {
     try {
+      const cacheKey = `search:semantic:${this.hashSearchQuery(query, 'semantic', limit, userId)}`;
+      const cached = await cache.get<SearchResult[]>(cacheKey);
+      if (cached) {
+        return { data: cached, status: 200 };
+      }
+
       const queryEmbedding = await EmbeddingService.generateEmbedding(query);
       const similar = await EmbeddingService.findSimilarPrompts(queryEmbedding, limit, 0.1);
 
@@ -50,6 +66,7 @@ export class SearchController {
         }))
         .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
 
+      await cache.set(cacheKey, results, 300); // 5 minutes
       return { data: results, status: 200 };
     } catch (error) {
       console.error('Semantic search error:', error);
@@ -109,6 +126,12 @@ export class SearchController {
     limit: number = 10
   ): Promise<{ data: SearchResult[]; status: number } | { error: string; status: number }> {
     try {
+      const cacheKey = `search:keyword:${this.hashSearchQuery(query, 'keyword', limit, userId)}`;
+      const cached = await cache.get<SearchResult[]>(cacheKey);
+      if (cached) {
+        return { data: cached, status: 200 };
+      }
+
       const visibilityFilter = userId
         ? [{ isPublic: true }, { userId }]
         : [{ isPublic: true }];
@@ -127,6 +150,7 @@ export class SearchController {
         take: limit,
       });
 
+      await cache.set(cacheKey, prompts, 300); // 5 minutes
       return { data: prompts, status: 200 };
     } catch (error) {
       console.error('Keyword search error:', error);

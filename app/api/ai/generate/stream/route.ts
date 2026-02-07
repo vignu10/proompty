@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   // Rate limit check for streaming endpoint
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'localhost';
-  const rateLimit = checkRateLimit(ip, 'ai');
+  const rateLimit = await checkRateLimit(ip, 'ai');
   if (!rateLimit.allowed) {
     return new Response(JSON.stringify({
       error: 'Too many requests',

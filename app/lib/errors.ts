@@ -149,6 +149,16 @@ export class ServiceUnavailableError extends AppError {
 }
 
 /**
+ * 503 Cache Service Unavailable - Redis cache error
+ */
+export class CacheError extends ExternalServiceError {
+  constructor(message: string = 'Cache service unavailable') {
+    super(message, 'cache');
+    Object.setPrototypeOf(this, CacheError.prototype);
+  }
+}
+
+/**
  * Check if an error is an operational error (expected) vs programming error
  */
 export function isOperationalError(error: unknown): boolean {
