@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/middleware/auth";
 import { PromptController } from "@/app/controllers/PromptController";
+import { withRateLimit } from "@/app/middleware/rateLimit";
 
 // Get prompts - public ones for everyone, private ones only for authenticated users
 export async function GET(request: Request) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const auth = await verifyAuth(request).catch(() => null);
   const userId = auth && !("error" in auth) ? auth.userId : null;
 
@@ -46,6 +50,9 @@ export async function GET(request: Request) {
 
 // Star/unstar a prompt
 export async function PUT(request: Request) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const auth = await verifyAuth(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -87,6 +94,9 @@ export async function PUT(request: Request) {
 
 // Create a new prompt
 export async function POST(request: Request) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   // Verify authentication
   const auth = await verifyAuth(request);
   if ("error" in auth) {

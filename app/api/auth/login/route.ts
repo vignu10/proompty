@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { AuthController } from '@/app/controllers/AuthController';
+import { withRateLimit } from '@/app/middleware/rateLimit';
 
 export async function POST(request: Request) {
+  const rateLimitResponse = await withRateLimit(request, 'auth');
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { email, password } = await request.json();
     const result = await AuthController.login(email, password);

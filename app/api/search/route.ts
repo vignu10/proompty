@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyAuth } from '@/app/middleware/auth';
 import { SearchController } from '@/app/controllers/SearchController';
+import { withRateLimit } from '@/app/middleware/rateLimit';
 
 export async function GET(request: Request) {
+  const rateLimitResponse = await withRateLimit(request, 'search');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const auth = await verifyAuth(request).catch(() => null);
   const userId = auth && !('error' in auth) ? auth.userId : null;
 

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { verifyAuthAndOwnership } from "@/app/middleware/auth";
 import { PromptController } from "@/app/controllers/PromptController";
+import { withRateLimit } from "@/app/middleware/rateLimit";
 
 // Get a single prompt
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const result = await verifyAuthAndOwnership(request, params.id);
     if ("error" in result) {
@@ -41,6 +45,9 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const auth = await verifyAuthAndOwnership(request, params.id);
     if ("error" in auth) {
@@ -77,6 +84,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const rateLimitResponse = await withRateLimit(request, 'crud');
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const auth = await verifyAuthAndOwnership(request, params.id);
     if ("error" in auth) {

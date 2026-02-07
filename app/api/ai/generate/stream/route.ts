@@ -1,9 +1,23 @@
 import { verifyAuth } from '@/app/middleware/auth';
 import { RAGService } from '@/app/services/RAGService';
+import { checkRateLimit } from '@/app/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  // Rate limit check for streaming endpoint
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'localhost';
+  const rateLimit = checkRateLimit(ip, 'ai');
+  if (!rateLimit.allowed) {
+    return new Response(JSON.stringify({
+      error: 'Too many requests',
+      retryAfter: Math.ceil(rateLimit.resetIn / 1000)
+    }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const auth = await verifyAuth(request);
   if ('error' in auth) {
     return new Response(JSON.stringify({ error: auth.error }), {
