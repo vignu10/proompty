@@ -1,262 +1,126 @@
 /**
- * Redis Cache Service
+ * No-Op Cache Service
  *
- * Provides caching layer with automatic TTL support and pattern-based invalidation.
+ * Cache operations are disabled. All methods return without doing anything.
  */
 
-import Redis from 'ioredis';
-import { env } from './env';
-import { logger } from './logger';
-import { CacheError } from './errors';
-
 class CacheService {
-  private client: Redis | null = null;
-  private enabled: boolean;
-
-  constructor() {
-    this.enabled = env.CACHE_ENABLED;
-    if (this.enabled) {
-      this.client = new Redis(env.REDIS_URL, {
-        retryStrategy: (times) => Math.min(times * 50, 2000),
-        maxRetriesPerRequest: 3,
-        enableReadyCheck: true,
-      });
-      this.client.on('error', (err) => logger.error('Redis error', { error: err.message }));
-      this.client.on('connect', () => logger.info('Redis connected'));
-      this.client.on('ready', () => logger.info('Redis ready'));
-      this.client.on('close', () => logger.warn('Redis connection closed'));
-    }
-  }
-
   /**
-   * Get a value from cache
+   * Get a value from cache (always returns null)
    */
-  async get<T>(key: string): Promise<T | null> {
-    if (!this.enabled || !this.client) return null;
-    try {
-      const value = await this.client.get(key);
-      return value ? JSON.parse(value) : null;
-    } catch (error) {
-      logger.warn('Cache get failed', { key, error });
-      return null;
-    }
+  async get<T>(_key: string): Promise<T | null> {
+    return null;
   }
 
   /**
-   * Set a value in cache with optional TTL
+   * Set a value in cache (no-op)
    */
-  async set(key: string, value: unknown, ttl?: number): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      const serialized = JSON.stringify(value);
-      if (ttl) {
-        await this.client.setex(key, ttl, serialized);
-      } else {
-        await this.client.set(key, serialized);
-      }
-    } catch (error) {
-      logger.warn('Cache set failed', { key, error });
-    }
+  async set(_key: string, _value: unknown, _ttl?: number): Promise<void> {
+    // No-op
   }
 
   /**
-   * Delete a specific key from cache
+   * Delete a specific key from cache (no-op)
    */
-  async del(key: string): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      await this.client.del(key);
-    } catch (error) {
-      logger.warn('Cache delete failed', { key, error });
-    }
+  async del(_key: string): Promise<void> {
+    // No-op
   }
 
   /**
-   * Delete all keys matching a pattern
+   * Delete all keys matching a pattern (no-op)
    */
-  async delPattern(pattern: string): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      const keys = await this.client.keys(pattern);
-      if (keys.length > 0) {
-        await this.client.del(...keys);
-      }
-    } catch (error) {
-      logger.warn('Cache pattern delete failed', { pattern, error });
-    }
+  async delPattern(_pattern: string): Promise<void> {
+    // No-op
   }
 
   /**
-   * Invalidate all prompt-related caches
+   * Invalidate all prompt-related caches (no-op)
    */
-  async invalidatePrompts(userId?: string): Promise<void> {
-    await this.delPattern('prompts:list:*');
-    await this.delPattern('prompts:byUser:*');
-    await this.delPattern('search:*');
-    if (userId) {
-      await this.delPattern(`prompts:user:${userId}:*`);
-    }
+  async invalidatePrompts(_userId?: string): Promise<void> {
+    // No-op
   }
 
   /**
-   * Invalidate a specific prompt's cache
+   * Invalidate a specific prompt's cache (no-op)
    */
-  async invalidatePrompt(id: string, userId?: string): Promise<void> {
-    await this.del(`prompt:${id}`);
-    await this.invalidatePrompts(userId);
+  async invalidatePrompt(_id: string, _userId?: string): Promise<void> {
+    // No-op
   }
 
   /**
-   * Check if Redis is connected and ready
+   * Check if cache is healthy (always true for no-op)
    */
   async ping(): Promise<boolean> {
-    if (!this.enabled || !this.client) return false;
-    try {
-      const result = await this.client.ping();
-      return result === 'PONG';
-    } catch {
-      return false;
-    }
+    return true;
   }
 
   /**
-   * Close the Redis connection
+   * Close the cache connection (no-op)
    */
   async quit(): Promise<void> {
-    if (this.client) {
-      await this.client.quit();
-      this.client = null;
-    }
+    // No-op
   }
 
   /**
-   * Get the Redis client for advanced usage
+   * Get the cache client (always null)
    */
-  getClient(): Redis | null {
-    return this.client;
+  getClient(): null {
+    return null;
   }
 
   /**
-   * Execute a Lua script atomically
+   * Execute a Lua script (no-op)
    */
-  async eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<unknown> {
-    if (!this.enabled || !this.client) {
-      throw new CacheError('Cache is not enabled');
-    }
-    try {
-      return await this.client.eval(script, numKeys, ...args);
-    } catch (error) {
-      logger.warn('Cache eval failed', { error });
-      throw new CacheError('Cache operation failed');
-    }
+  async eval(): Promise<unknown> {
+    return null;
   }
 
   /**
-   * Increment a counter atomically
+   * Increment a counter (returns 0)
    */
-  async incr(key: string): Promise<number> {
-    if (!this.enabled || !this.client) {
-      throw new CacheError('Cache is not enabled');
-    }
-    return await this.client.incr(key);
+  async incr(): Promise<number> {
+    return 0;
   }
 
   /**
-   * Set expiration on a key
+   * Set expiration on a key (no-op)
    */
-  async expire(key: string, seconds: number): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      await this.client.expire(key, seconds);
-    } catch (error) {
-      logger.warn('Cache expire failed', { key, error });
-    }
+  async expire(): Promise<void> {
+    // No-op
   }
 
   /**
    * Get multiple keys at once
    */
-  async mget<T>(keys: string[]): Promise<(T | null)[]> {
-    if (!this.enabled || !this.client || keys.length === 0) return keys.map(() => null);
-    try {
-      const values = await this.client.mget(...keys);
-      return values.map((v) => (v ? JSON.parse(v) : null));
-    } catch (error) {
-      logger.warn('Cache mget failed', { keys, error });
-      return keys.map(() => null);
-    }
+  async mget<T>(_keys: string[]): Promise<(T | null)[]> {
+    return [];
   }
 
   /**
-   * Set multiple keys at once
+   * Set multiple keys at once (no-op)
    */
-  async mset(keyValuePairs: Record<string, unknown>): Promise<void> {
-    if (!this.enabled || !this.client || Object.keys(keyValuePairs).length === 0) return;
-    try {
-      const pipeline = this.client.pipeline();
-      for (const [key, value] of Object.entries(keyValuePairs)) {
-        pipeline.set(key, JSON.stringify(value));
-      }
-      await pipeline.exec();
-    } catch (error) {
-      logger.warn('Cache mset failed', { error });
-    }
+  async mset(): Promise<void> {
+    // No-op
   }
 
   /**
    * Hash helpers for rate limiter
    */
-  async hget(key: string, field: string): Promise<string | null> {
-    if (!this.enabled || !this.client) return null;
-    try {
-      return await this.client.hget(key, field);
-    } catch (error) {
-      logger.warn('Cache hget failed', { key, field, error });
-      return null;
-    }
+  async hget(): Promise<string | null> {
+    return null;
   }
 
-  async hset(key: string, field: string, value: string | number): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      await this.client.hset(key, field, value);
-    } catch (error) {
-      logger.warn('Cache hset failed', { key, field, error });
-    }
+  async hset(): Promise<void> {
+    // No-op
   }
 
-  async hgetall(key: string): Promise<Record<string, string> | null> {
-    if (!this.enabled || !this.client) return null;
-    try {
-      return await this.client.hgetall(key);
-    } catch (error) {
-      logger.warn('Cache hgetall failed', { key, error });
-      return null;
-    }
+  async hgetall(): Promise<Record<string, string> | null> {
+    return null;
   }
 
-  async hdel(key: string, field: string): Promise<void> {
-    if (!this.enabled || !this.client) return;
-    try {
-      await this.client.hdel(key, field);
-    } catch (error) {
-      logger.warn('Cache hdel failed', { key, field, error });
-    }
+  async hdel(): Promise<void> {
+    // No-op
   }
 }
 
 export const cache = new CacheService();
-
-/**
- * Create a consistent hash from query parameters for cache keys
- */
-export function hashQuery(params: Record<string, unknown>): string {
-  const str = JSON.stringify(params);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(36);
-}

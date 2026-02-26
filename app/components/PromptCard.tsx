@@ -8,6 +8,7 @@ import {
   Tag,
   TagLabel,
   IconButton,
+  Checkbox,
   useColorModeValue,
   Tooltip,
   Popover,
@@ -19,6 +20,15 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { StarIcon, RepeatIcon, EditIcon, DeleteIcon } from "@chakra-ui/icons";
+import { CategoryBadges } from "./CategoryBadge";
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  color?: string | null;
+  icon?: string | null;
+}
 
 interface Prompt {
   id: string;
@@ -34,21 +44,37 @@ interface Prompt {
     name: string | null;
     email: string;
   };
+  categories?: {
+    category: Category;
+    sortOrder: number;
+  }[];
 }
 
 interface PromptCardProps {
   prompt: Prompt;
   currentUserId: string;
-  onStar: (promptId: string) => Promise<void>;
+  onStar?: (promptId: string) => Promise<void>;
   onFork?: (promptId: string) => Promise<void>;
   onView: (promptId: string) => void;
-  onEdit: (promptId: string) => void;
+  onEdit?: (promptId: string) => void;
   onDelete?: (promptId: string) => Promise<void>;
+  isSelected?: boolean;
+  onToggleSelect?: (promptId: string) => void;
 }
 
-export default function PromptCard({ prompt, currentUserId, onStar, onFork, onView, onEdit, onDelete }: PromptCardProps) {
+export default function PromptCard({
+  prompt,
+  currentUserId,
+  onStar,
+  onFork,
+  onView,
+  onEdit,
+  onDelete,
+  isSelected,
+  onToggleSelect
+}: PromptCardProps) {
   const bgColor = useColorModeValue("white", "gray.800");
-  const isStarred = prompt.starredBy.includes(currentUserId);
+  const isStarred = prompt.starredBy?.includes(currentUserId);
   const isOwnPrompt = currentUserId === prompt.userId;
 
   return (
@@ -67,27 +93,51 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
       flexDirection="column"
       _hover={{ shadow: 'lg', transform: 'translateY(-2px)' }}
       transition="all 0.2s"
+      borderColor={isSelected ? "blue.400" : undefined}
     >
-      <Box mb={6} position="relative" flex="none">
+      {/* Selection Checkbox */}
+      {onToggleSelect && (
+        <Checkbox
+          position="absolute"
+          top={2}
+          left={2}
+          zIndex={10}
+          isChecked={isSelected}
+          onChange={() => onToggleSelect(prompt.id)}
+          onClick={(e) => e.stopPropagation()}
+          colorScheme="blue"
+          size="lg"
+          aria-label={`Select ${prompt.title}`}
+          _focusVisible={{
+            boxShadow: "0 0 0 3px rgba(66, 153, 225, 0.6)",
+            ring: "2px",
+            ringColor: "blue.400",
+          }}
+        />
+      )}
+
+      <Box mb={6} position="relative" flex="none" pl={onToggleSelect ? 8 : 0}>
         <Heading size="md" pr={24}>{prompt.title}</Heading>
-        
-        <Box 
-          position="absolute" 
-          top={0} 
-          right={0} 
+
+        <Box
+          position="absolute"
+          top={0}
+          right={0}
           onClick={(e) => e.stopPropagation()}
         >
           <HStack spacing={1}>
             {isOwnPrompt ? (
               <>
-                <IconButton
-                  aria-label="Edit prompt"
-                  icon={<EditIcon />}
-                  size="sm"
-                  colorScheme="green"
-                  variant="ghost"
-                  onClick={() => onEdit(prompt.id)}
-                />
+                {onEdit && (
+                  <IconButton
+                    aria-label="Edit prompt"
+                    icon={<EditIcon />}
+                    size="sm"
+                    colorScheme="green"
+                    variant="ghost"
+                    onClick={() => onEdit(prompt.id)}
+                  />
+                )}
                 {onDelete && (
                   <IconButton
                     aria-label="Delete prompt"
@@ -101,14 +151,16 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
               </>
             ) : (
               <>
-                <IconButton
-                  aria-label={isStarred ? "Unstar prompt" : "Star prompt"}
-                  icon={<StarIcon />}
-                  size="sm"
-                  colorScheme={isStarred ? "yellow" : "gray"}
-                  variant="ghost"
-                  onClick={() => onStar(prompt.id)}
-                />
+                {onStar && (
+                  <IconButton
+                    aria-label={isStarred ? "Unstar prompt" : "Star prompt"}
+                    icon={<StarIcon />}
+                    size="sm"
+                    colorScheme={isStarred ? "yellow" : "gray"}
+                    variant="ghost"
+                    onClick={() => onStar(prompt.id)}
+                  />
+                )}
                 {onFork && (
                   <IconButton
                     aria-label="Clone prompt"
@@ -136,6 +188,17 @@ export default function PromptCard({ prompt, currentUserId, onStar, onFork, onVi
       </Text>
 
       <Box mt="auto" flex="none">
+        {prompt.categories && prompt.categories.length > 0 && (
+          <HStack spacing={2} wrap="wrap" mb={3}>
+            <CategoryBadges
+              categories={prompt.categories.map((pc) => pc.category)}
+              size="sm"
+              variant="subtle"
+              maxDisplay={3}
+            />
+          </HStack>
+        )}
+
         <HStack spacing={2} wrap="wrap" mb={3}>
           {prompt.tags.map((tag) => (
             <Tag key={tag} size="sm" colorScheme="blue">

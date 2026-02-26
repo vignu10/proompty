@@ -14,10 +14,8 @@ export const env = {
   DATABASE_URL: requireEnv('DATABASE_URL'),
   JWT_SECRET: requireEnv('JWT_SECRET'),
 
-  // Redis Cache
-  REDIS_URL: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
-  CACHE_ENABLED: optionalEnv('CACHE_ENABLED', 'true') === 'true',
-  CACHE_TTL: parseInt(optionalEnv('CACHE_TTL', '3600'), 10),
+  // Cache TTL (in seconds, for future use)
+  CACHE_TTL: 3600,
 
   // OpenAI — optional at startup, validated when AI features are used
   get OPENAI_API_KEY() {

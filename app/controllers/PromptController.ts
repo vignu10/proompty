@@ -7,12 +7,13 @@ export class PromptController {
     visibility: 'all' | 'public' | 'private' | 'starred' = 'all',
     page: number = 1,
     pageSize: number = 10,
-    tags: string[] = []
+    tags: string[] = [],
+    categoryIds: string[] = []
   ) {
     try {
-      const { prompts, total } = await Prompt.findByUser(userId, visibility, page, pageSize, tags);
-      return { 
-        data: { 
+      const { prompts, total } = await Prompt.findByUser(userId, visibility, page, pageSize, tags, categoryIds);
+      return {
+        data: {
           prompts,
           pagination: {
             total,
@@ -20,8 +21,8 @@ export class PromptController {
             pageSize,
             totalPages: Math.ceil(total / pageSize)
           }
-        }, 
-        status: 200 
+        },
+        status: 200
       };
     } catch (error) {
       console.error('Error fetching prompts:', error);

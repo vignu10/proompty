@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/app/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
   Button,
@@ -25,21 +25,47 @@ import {
   Tab,
   TabPanels,
   TabPanel,
+  Flex,
+  Spinner,
 } from "@chakra-ui/react";
 import AIPromptGenerator from "@/app/components/AIPromptGenerator";
+import TemplateGallery from "@/app/components/TemplateGallery";
+import CategorySelector, { Category } from "@/app/components/CategorySelector";
+import GradientText from "@/app/components/GradientText";
+import { spacing, colors } from "@/app/theme/tokens";
 
 export default function NewPromptPage() {
+  const searchParams = useSearchParams();
+  const templateId = searchParams.get("template");
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [tabIndex, setTabIndex] = useState(0);
+  const [tabIndex, setTabIndex] = useState(templateId ? 2 : 0);
   const { token } = useAuth();
   const router = useRouter();
   const toast = useToast();
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === ",") {
@@ -60,7 +86,8 @@ export default function NewPromptPage() {
     setTitle(data.title);
     setContent(data.content);
     setTags(data.tags);
-    if (data.category) setCategory(data.category);
+    // Note: AI returns a single category name, but we now use categoryIds array
+    // For now, we'll skip setting category from AI to avoid complexity
     setIsPublic(data.isPublic);
     setTabIndex(0); // Switch to manual tab to review/edit
     toast({
@@ -85,7 +112,7 @@ export default function NewPromptPage() {
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),
-          category: category.trim() || null,
+          categoryIds,
           tags,
           isPublic,
         }),
@@ -120,20 +147,20 @@ export default function NewPromptPage() {
   };
 
   return (
-    <Box bg="space.navy" minH="calc(100vh - 64px)">
-      <Container maxW="container.md" py={12}>
-        <VStack spacing={8} align="stretch">
+    <Box bg={colors.background.primary} minH="calc(100vh - 64px)">
+      <Container maxW="container.md" py={spacing.xl}>
+        <VStack spacing={spacing.lg} align="stretch">
           <Box textAlign="center">
-            <Heading
+            <GradientText
+              as="h1"
               size="xl"
-              mb={3}
-              bgGradient="linear(to-r, neon.blue, neon.purple)"
-              bgClip="text"
+              mb={spacing.md}
               letterSpacing="tight"
+              variant="primary"
             >
               Create New Prompt
-            </Heading>
-            <Text color="whiteAlpha.800" fontSize="lg">
+            </GradientText>
+            <Text color={colors.text.muted} fontSize="lg">
               Create a new AI prompt template to share with the community
             </Text>
           </Box>
@@ -151,6 +178,9 @@ export default function NewPromptPage() {
               <Tab color="whiteAlpha.700" _selected={{ color: "white", bg: "blue.500" }}>
                 AI Generate
               </Tab>
+              <Tab color="whiteAlpha.700" _selected={{ color: "white", bg: "blue.500" }}>
+                Start from Template
+              </Tab>
             </TabList>
 
             <TabPanels>
@@ -158,58 +188,37 @@ export default function NewPromptPage() {
                 <Box
                   as="form"
                   onSubmit={handleSubmit}
-                  bg="space.darkNavy"
-                  p={10}
+                  bg={colors.background.elevated}
+                  p={spacing.xl}
                   rounded="2xl"
                   shadow="2xl"
                   borderWidth="1px"
                   borderColor="whiteAlpha.200"
-                  backdropFilter="blur(10px)"
                   position="relative"
-                  _before={{
-                    content: '""',
-                    position: "absolute",
-                    top: "-1px",
-                    left: 0,
-                    right: 0,
-                    height: "1px",
-                    background:
-                      "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
-                  }}
-                  _after={{
-                    content: '""',
-                    position: "absolute",
-                    bottom: "-1px",
-                    left: 0,
-                    right: 0,
-                    height: "1px",
-                    background:
-                      "linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.5), transparent)",
-                  }}
                 >
-                  <Stack spacing={6}>
+                  <Stack spacing={spacing.md}>
                     <FormControl isRequired>
-                      <FormLabel color="whiteAlpha.900">Title</FormLabel>
+                      <FormLabel color={colors.text.primary}>Title</FormLabel>
                       <Input
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="Enter a descriptive title"
                         size="lg"
                         maxLength={20}
-                        bg="space.navy"
+                        bg={colors.background.primary}
                         borderColor="whiteAlpha.200"
-                        color="whiteAlpha.900"
-                        _placeholder={{ color: "whiteAlpha.500" }}
-                        _hover={{ borderColor: "neon.blue" }}
+                        color={colors.text.primary}
+                        _placeholder={{ color: colors.text.muted }}
+                        _hover={{ borderColor: colors.primary[50] }}
                         _focus={{
-                          borderColor: "neon.blue",
-                          boxShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
+                          borderColor: colors.primary[50],
+                          boxShadow: `0 0 8px ${colors.primary[50]}40`,
                         }}
                       />
                     </FormControl>
 
                     <FormControl isRequired>
-                      <FormLabel color="whiteAlpha.900">Content</FormLabel>
+                      <FormLabel color={colors.text.primary}>Content</FormLabel>
                       <Textarea
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
@@ -217,21 +226,21 @@ export default function NewPromptPage() {
                         size="lg"
                         minH="250px"
                         resize="vertical"
-                        bg="space.navy"
+                        bg={colors.background.primary}
                         borderColor="whiteAlpha.200"
-                        color="whiteAlpha.900"
-                        _placeholder={{ color: "whiteAlpha.500" }}
-                        _hover={{ borderColor: "neon.blue" }}
+                        color={colors.text.primary}
+                        _placeholder={{ color: colors.text.muted }}
+                        _hover={{ borderColor: colors.primary[50] }}
                         _focus={{
-                          borderColor: "neon.blue",
-                          boxShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
+                          borderColor: colors.primary[50],
+                          boxShadow: `0 0 8px ${colors.primary[50]}40`,
                         }}
                       />
                     </FormControl>
 
                     <FormControl>
-                      <FormLabel color="whiteAlpha.900">Visibility</FormLabel>
-                      <HStack spacing={4}>
+                      <FormLabel color={colors.text.primary}>Visibility</FormLabel>
+                      <HStack spacing={spacing.md}>
                         <Button
                           flex="1"
                           variant={isPublic ? "solid" : "outline"}
@@ -254,21 +263,13 @@ export default function NewPromptPage() {
                     </FormControl>
 
                     <FormControl>
-                      <FormLabel color="whiteAlpha.900">Category</FormLabel>
-                      <Input
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        placeholder="e.g., Writing, Code, Marketing"
-                        size="lg"
-                        bg="space.navy"
-                        borderColor="whiteAlpha.200"
-                        color="whiteAlpha.900"
-                        _placeholder={{ color: "whiteAlpha.500" }}
-                        _hover={{ borderColor: "neon.blue" }}
-                        _focus={{
-                          borderColor: "neon.blue",
-                          boxShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
-                        }}
+                      <FormLabel color="whiteAlpha.900">Categories</FormLabel>
+                      <CategorySelector
+                        selectedCategoryIds={categoryIds}
+                        onCategoryChange={setCategoryIds}
+                        categories={categories}
+                        placeholder="Select categories..."
+                        isMultiSelect={true}
                       />
                     </FormControl>
 
@@ -280,15 +281,15 @@ export default function NewPromptPage() {
                         onKeyDown={handleAddTag}
                         placeholder="Type a tag and press Enter"
                         size="lg"
-                        mb={3}
-                        bg="space.navy"
+                        mb={spacing.sm}
+                        bg={colors.background.primary}
                         borderColor="whiteAlpha.200"
-                        color="whiteAlpha.900"
-                        _placeholder={{ color: "whiteAlpha.500" }}
-                        _hover={{ borderColor: "neon.blue" }}
+                        color={colors.text.primary}
+                        _placeholder={{ color: colors.text.muted }}
+                        _hover={{ borderColor: colors.primary[50] }}
                         _focus={{
-                          borderColor: "neon.blue",
-                          boxShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
+                          borderColor: colors.primary[50],
+                          boxShadow: `0 0 8px ${colors.primary[50]}40`,
                         }}
                       />
                       <HStack spacing={2} wrap="wrap" minH="40px">
@@ -309,14 +310,14 @@ export default function NewPromptPage() {
                       </HStack>
                     </FormControl>
 
-                    <HStack spacing={4} justify="flex-end">
+                    <HStack spacing={spacing.md} justify="flex-end">
                       <Button
                         variant="ghost"
                         onClick={() => router.push("/prompts")}
-                        color="whiteAlpha.900"
+                        color={colors.text.primary}
                         _hover={{
-                          color: "neon.blue",
-                          textShadow: "0 0 8px rgba(0, 243, 255, 0.5)",
+                          color: colors.primary[50],
+                          bg: `${colors.primary[50]}15`,
                         }}
                       >
                         Cancel
@@ -327,8 +328,6 @@ export default function NewPromptPage() {
                         size="lg"
                         isLoading={isLoading}
                         loadingText="Creating..."
-                        _hover={{ filter: "brightness(1.2)" }}
-                        transition="all 0.2s"
                       >
                         Create Prompt
                       </Button>
@@ -340,10 +339,60 @@ export default function NewPromptPage() {
               <TabPanel px={0}>
                 <AIPromptGenerator onAccept={handleAIAccept} />
               </TabPanel>
+
+              <TabPanel px={0}>
+                <TemplateGallery
+                  currentUserId={token ? "user" : ""}
+                  onUseTemplate={(tmplId) => {
+                    // Load template data into the form
+                    loadTemplateData(tmplId);
+                    setTabIndex(0); // Switch to manual tab
+                  }}
+                  onViewTemplate={(tmplId) => {
+                    router.push(`/prompts/${tmplId}`);
+                  }}
+                />
+              </TabPanel>
             </TabPanels>
           </Tabs>
         </VStack>
       </Container>
     </Box>
   );
+
+  const loadTemplateData = async (tmplId: string) => {
+    try {
+      const response = await fetch(`/api/prompts/${tmplId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load template");
+      }
+
+      const data = await response.json();
+      setTitle(data.title + " (Copy)");
+      setContent(data.content);
+      if (data.categories) {
+        setCategoryIds(data.categories.map((c: any) => c.category?.id || c.categoryId));
+      }
+      setTags(data.tags || []);
+      setIsPublic(false); // Start as private
+      toast({
+        title: "Template loaded",
+        description: "Edit the template and save as your own prompt",
+        status: "info",
+        duration: 3000,
+      });
+    } catch (err) {
+      toast({
+        title: "Error loading template",
+        description: err instanceof Error ? err.message : "Failed to load template",
+        status: "error",
+        duration: 5000,
+      });
+    }
+  };
 }

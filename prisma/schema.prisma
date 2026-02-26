@@ -16,30 +16,75 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
-  prompts   Prompt[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  name           String?
+  prompts        Prompt[]
+  interactions   PromptInteraction[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Category {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  slug       String   @unique
+  color      String?
+  icon       String?
+  sortOrder  Int      @default(0)
+  isSystem   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  prompts    PromptCategory[]
+}
+
+model PromptCategory {
+  id         String   @id @default(uuid())
+  promptId   String
+  categoryId String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([promptId, categoryId])
 }
 
 model Prompt {
   id             String   @id @default(uuid())
   title          String
   content        String   @db.Text
-  category       String?
   tags           String[]
   isPublic       Boolean  @default(false)
-  starredBy      String[] @default([])  // Array of user IDs who starred this prompt
+  starredBy      String[] @default([]) // Array of user IDs who starred this prompt
   originalPrompt  Prompt?  @relation("Forks", fields: [originalPromptId], references: [id])
-  originalPromptId String? 
+  originalPromptId String?
   forks          Prompt[] @relation("Forks")
   user           User     @relation(fields: [userId], references: [id])
   userId         String
+  categories     PromptCategory[]
+  interactions   PromptInteraction[]
+  isTemplate     Boolean  @default(false)
+  useCount       Int      @default(0)
+  viewCount      Int      @default(0)
+  forkCount      Int      @default(0)
+  lastViewedAt   DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@map("prompts")
+}
+
+model PromptInteraction {
+  id         String   @id @default(uuid())
+  promptId   String
+  userId     String
+  type       String // viewed, starred, forked, used_as_template
+  createdAt  DateTime @default(now())
+  prompt     Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promptId, userId, type])
+  @@index([userId, createdAt])
 }

@@ -163,6 +163,19 @@ export type PaginationInput = z.infer<typeof paginationSchema>;
 export type PromptListQueryInput = z.infer<typeof promptListQuerySchema>;
 
 // ============================================
+// Bulk Action Validators
+// ============================================
+
+export const bulkActionSchema = z.object({
+  action: z.enum(["delete", "star", "unstar", "export", "addTags", "removeTags", "setCategories"]),
+  promptIds: z.array(z.string().min(1, "Invalid prompt ID")).min(1, "At least one prompt ID is required"),
+  tags: z.array(z.string().max(50, "Tag must be 50 characters or less")).optional(),
+  categoryIds: z.array(z.string().min(1, "Invalid category ID")).optional(),
+});
+
+export type BulkActionInput = z.infer<typeof bulkActionSchema>;
+
+// ============================================
 // Utility Functions
 // ============================================
 

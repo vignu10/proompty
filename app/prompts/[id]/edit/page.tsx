@@ -25,6 +25,9 @@ import {
 } from "@chakra-ui/react";
 import AIRefinePanel from "@/app/components/AIRefinePanel";
 import AISuggestions from "@/app/components/AISuggestions";
+import CategorySelector, { Category } from "@/app/components/CategorySelector";
+import GradientText from "@/app/components/GradientText";
+import { spacing, colors } from "@/app/theme/tokens";
 
 interface Prompt {
   id: string;
@@ -39,7 +42,8 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
@@ -48,6 +52,22 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
   const { token } = useAuth();
   const router = useRouter();
   const toast = useToast();
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     fetchPrompt();
@@ -70,7 +90,10 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
       setPrompt(data);
       setTitle(data.title);
       setContent(data.content);
-      setCategory(data.category || "");
+      // Extract category IDs from the categories array if it exists
+      if (data.categories && Array.isArray(data.categories)) {
+        setCategoryIds(data.categories.map((c: any) => c.category?.id || c.categoryId));
+      }
       setTags(data.tags || []);
       setIsPublic(data.isPublic);
     } catch (err) {
@@ -105,7 +128,8 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
   const handleRefineApply = (data: { title: string; content: string; category: string; tags: string[] }) => {
     setTitle(data.title);
     setContent(data.content);
-    if (data.category) setCategory(data.category);
+    // Note: AI returns a single category name, but we now use categoryIds array
+    // For now, we'll skip setting category from AI to avoid complexity
     setTags(data.tags);
     toast({
       title: "AI refinement applied",
@@ -113,6 +137,41 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
       status: "info",
       duration: 3000,
     });
+  };
+
+  const handleSaveAsTemplate = async () => {
+    try {
+      const response = await fetch("/api/templates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ promptId: params.id }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save template");
+      }
+
+      toast({
+        title: "Success",
+        description: "Prompt saved as template",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description:
+          err instanceof Error ? err.message : "Failed to save template",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -129,7 +188,7 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),
-          category: category.trim() || null,
+          categoryIds,
           tags,
           isPublic,
         }),
@@ -176,18 +235,18 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <Container maxW="container.md" py={8}>
-      <VStack spacing={8} align="stretch">
+    <Container maxW="container.md" py={spacing.md}>
+      <VStack spacing={spacing.lg} align="stretch">
         <Box>
-          <Heading
+          <GradientText
+            as="h1"
             size="lg"
-            mb={2}
-            bgGradient="linear(to-r, cyan.400, blue.500, purple.600)"
-            bgClip="text"
+            mb={spacing.sm}
+            variant="primary"
           >
             Edit Prompt
-          </Heading>
-          <Text color="whiteAlpha.700" fontSize="lg" letterSpacing="wide">
+          </GradientText>
+          <Text color={colors.text.muted} fontSize="lg" letterSpacing="wide">
             Update your prompt template
           </Text>
         </Box>
@@ -248,12 +307,13 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
             </FormControl>
 
             <FormControl>
-              <FormLabel>Category</FormLabel>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="e.g., Writing, Code, Marketing"
-                size="lg"
+              <FormLabel>Categories</FormLabel>
+              <CategorySelector
+                selectedCategoryIds={categoryIds}
+                onCategoryChange={setCategoryIds}
+                categories={categories}
+                placeholder="Select categories..."
+                isMultiSelect={true}
               />
             </FormControl>
 
@@ -267,21 +327,15 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
                 size="lg"
                 mb={2}
               />
-              <HStack spacing={2} wrap="wrap">
+              <HStack spacing={spacing.sm} wrap="wrap">
                 {tags.map((tag) => (
                   <Tag
                     key={tag}
                     size="lg"
                     borderRadius="full"
                     variant="solid"
-                    bg="space.navy"
-                    color="neon.blue"
-                    border="1px solid"
-                    borderColor="neon.blue"
-                    boxShadow="0 0 10px rgba(0, 243, 255, 0.2)"
-                    transition="all 0.2s ease-in-out"
+                    colorScheme="blue"
                     _hover={{
-                      boxShadow: "0 0 15px rgba(0, 243, 255, 0.4)",
                       transform: "translateY(-1px)",
                     }}
                   >
@@ -301,6 +355,13 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
                 Cancel
               </Button>
               <Button
+                onClick={handleSaveAsTemplate}
+                variant="outline"
+                colorScheme="purple"
+              >
+                Save as Template
+              </Button>
+              <Button
                 type="submit"
                 colorScheme="blue"
                 size="lg"
@@ -308,6 +369,13 @@ export default function EditPromptPage({ params }: { params: { id: string } }) {
                 loadingText="Updating..."
               >
                 Update Prompt
+              </Button>
+              <Button
+                onClick={handleSaveAsTemplate}
+                variant="outline"
+                colorScheme="purple"
+              >
+                Save as Template
               </Button>
             </HStack>
           </Stack>

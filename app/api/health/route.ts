@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { openai } from '@/app/lib/openai';
-import { cache } from '@/app/lib/cache';
-import { env } from '@/app/lib/env';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -12,7 +10,6 @@ interface HealthStatus {
     database: CheckResult;
     pgvector: CheckResult;
     openai: CheckResult;
-    redis: CheckResult;
   };
 }
 
@@ -100,44 +97,17 @@ async function checkOpenAI(): Promise<CheckResult> {
   }
 }
 
-async function checkRedis(): Promise<CheckResult> {
-  if (!env.CACHE_ENABLED) {
-    return {
-      status: 'pass',
-      message: 'Cache disabled',
-    };
-  }
-
-  const start = Date.now();
-  try {
-    const isHealthy = await cache.ping();
-    return {
-      status: isHealthy ? 'pass' : 'fail',
-      latencyMs: Date.now() - start,
-      message: isHealthy ? undefined : 'Redis ping failed',
-    };
-  } catch (error) {
-    return {
-      status: 'fail',
-      latencyMs: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Redis unreachable',
-    };
-  }
-}
-
 export async function GET() {
-  const [database, pgvector, openaiCheck, redisCheck] = await Promise.all([
+  const [database, pgvector, openaiCheck] = await Promise.all([
     checkDatabase(),
     checkPgVector(),
     checkOpenAI(),
-    checkRedis(),
   ]);
 
   const checks = {
     database,
     pgvector,
     openai: openaiCheck,
-    redis: redisCheck,
   };
 
   // Determine overall status

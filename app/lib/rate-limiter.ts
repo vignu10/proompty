@@ -1,12 +1,8 @@
 /**
- * Token Bucket Rate Limiter with Redis Backend
+ * In-Memory Token Bucket Rate Limiter
  *
- * Persistent rate limiting using Redis for distributed systems.
+ * Rate limiting using in-memory storage.
  */
-
-import { cache } from './cache';
-import { env } from './env';
-import { logger } from './logger';
 
 interface RateLimitConfig {
   maxTokens: number;       // Maximum tokens in bucket
@@ -51,54 +47,6 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
 
 export type RateLimitCategory = keyof typeof RATE_LIMITS;
 
-// Lua script for atomic token bucket operations
-const TOKEN_BUCKET_LUA = `
-  local tokensKey = KEYS[1]
-  local lastRefillKey = KEYS[2]
-  local now = tonumber(ARGV[1])
-  local maxTokens = tonumber(ARGV[2])
-  refillInterval = tonumber(ARGV[3])
-  local tokensPerRefill = tonumber(ARGV[4])
-  local windowSize = tonumber(ARGV[5])
-
-  -- Get current tokens and last refill time
-  local tokens = tonumber(redis.call('GET', tokensKey))
-  local lastRefill = tonumber(redis.call('GET', lastRefillKey))
-
-  -- Initialize if not exists
-  if not tokens then
-    tokens = maxTokens
-  end
-  if not lastRefill then
-    lastRefill = now
-  end
-
-  -- Calculate tokens to add based on elapsed time
-  local elapsed = now - lastRefill
-  local refills = math.floor(elapsed / refillInterval)
-  local tokensToAdd = refills * tokensPerRefill
-
-  -- Refill tokens
-  if tokensToAdd > 0 then
-    tokens = math.min(maxTokens, tokens + tokensToAdd)
-    lastRefill = lastRefill + (refills * refillInterval)
-  end
-
-  -- Check if request is allowed
-  if tokens >= 1 then
-    -- Consume one token
-    tokens = tokens - 1
-    redis.call('SET', tokensKey, tokens)
-    redis.call('SET', lastRefillKey, lastRefill)
-    redis.call('EXPIRE', tokensKey, math.ceil(windowSize / 1000))
-    redis.call('EXPIRE', lastRefillKey, math.ceil(windowSize / 1000))
-    return {1, tokens, lastRefill}
-  else
-    -- Not enough tokens
-    return {0, tokens, lastRefill}
-  end
-`;
-
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -117,65 +65,28 @@ export async function checkRateLimit(
   category: RateLimitCategory = 'default'
 ): Promise<RateLimitResult> {
   const config = RATE_LIMITS[category] || RATE_LIMITS.default;
-
-  // If cache is disabled, always allow requests (dev mode fallback)
-  if (!env.CACHE_ENABLED) {
-    logger.warn('Rate limiting disabled - cache not enabled', { category, identifier });
-    return {
-      allowed: true,
-      remaining: config.maxTokens,
-      resetIn: 0,
-      limit: config.maxTokens,
-    };
-  }
-
-  const client = cache.getClient();
-  if (!client) {
-    logger.error('Redis client not available for rate limiting');
-    return {
-      allowed: true,
-      remaining: config.maxTokens,
-      resetIn: 0,
-      limit: config.maxTokens,
-    };
-  }
+  const key = `${category}:${identifier}`;
+  const bucket = getInMemoryBucket(key, config);
 
   const now = Date.now();
-  const keyTokens = `ratelimit:${category}:${identifier}:tokens`;
-  const keyLastRefill = `ratelimit:${category}:${identifier}:refill`;
+  const resetIn = Math.max(0, config.refillInterval - (now - bucket.lastRefill));
 
-  try {
-    const result = await client.eval(
-      TOKEN_BUCKET_LUA,
-      2,
-      keyTokens,
-      keyLastRefill,
-      now,
-      config.maxTokens,
-      config.refillInterval,
-      config.tokensPerRefill,
-      config.windowSize
-    ) as [number, number, number];
-
-    const [allowed, remaining, lastRefill] = result;
-    const resetIn = Math.max(0, (lastRefill + config.refillInterval) - now);
-
+  if (bucket.tokens > 0) {
+    bucket.tokens -= 1;
     return {
-      allowed: allowed === 1,
-      remaining,
+      allowed: true,
+      remaining: bucket.tokens,
       resetIn,
       limit: config.maxTokens,
     };
-  } catch (error) {
-    logger.error('Rate limit check failed', { category, identifier, error });
-    // Fail open - allow request if rate limiter fails
-    return {
-      allowed: true,
-      remaining: config.maxTokens,
-      resetIn: 0,
-      limit: config.maxTokens,
-    };
   }
+
+  return {
+    allowed: false,
+    remaining: 0,
+    resetIn,
+    limit: config.maxTokens,
+  };
 }
 
 /**
@@ -192,40 +103,27 @@ export function getRateLimitHeaders(result: RateLimitResult): Record<string, str
 /**
  * Reset rate limit for a specific identifier (admin function)
  */
-export async function resetRateLimit(
+export function resetRateLimit(
   identifier: string,
   category: RateLimitCategory = 'default'
-): Promise<void> {
-  const keyTokens = `ratelimit:${category}:${identifier}:tokens`;
-  const keyLastRefill = `ratelimit:${category}:${identifier}:refill`;
-
-  await Promise.all([
-    cache.del(keyTokens),
-    cache.del(keyLastRefill),
-  ]);
-
-  logger.info('Rate limit reset', { category, identifier });
+): void {
+  const key = `${category}:${identifier}`;
+  inMemoryBuckets.delete(key);
 }
 
 /**
  * Get current token count for a user (admin/monitoring)
  */
-export async function getRateLimitStatus(
+export function getRateLimitStatus(
   identifier: string,
   category: RateLimitCategory = 'default'
-): Promise<{ tokens: number | null; lastRefill: number | null }> {
-  const keyTokens = `ratelimit:${category}:${identifier}:tokens`;
-  const keyLastRefill = `ratelimit:${category}:${identifier}:refill`;
-
-  const [tokens, lastRefill] = await Promise.all([
-    cache.get<number>(keyTokens),
-    cache.get<number>(keyLastRefill),
-  ]);
-
-  return {
-    tokens,
-    lastRefill,
-  };
+): { tokens: number | null; lastRefill: number | null } {
+  const key = `${category}:${identifier}`;
+  const bucket = inMemoryBuckets.get(key);
+  if (!bucket) {
+    return { tokens: null, lastRefill: null };
+  }
+  return { tokens: bucket.tokens, lastRefill: bucket.lastRefill };
 }
 
 /**
@@ -266,7 +164,7 @@ function getInMemoryBucket(key: string, config: RateLimitConfig): TokenBucket {
 }
 
 /**
- * Synchronous rate limit check (fallback for non-async contexts)
+ * Synchronous rate limit check
  * Uses in-memory storage - not suitable for distributed systems
  */
 export function checkRateLimitSync(
@@ -299,7 +197,7 @@ export function checkRateLimitSync(
 }
 
 /**
- * Clean up old in-memory buckets (only used for sync fallback)
+ * Clean up old in-memory buckets
  */
 export function cleanupInMemoryBuckets(maxAge: number = 5 * 60 * 1000): void {
   const now = Date.now();
@@ -308,6 +206,75 @@ export function cleanupInMemoryBuckets(maxAge: number = 5 * 60 * 1000): void {
       inMemoryBuckets.delete(key);
     }
   }
+}
+
+/**
+ * Rate limit middleware wrapper for Next.js API routes
+ * Usage: withRateLimit(request, 'ai', handler) or withRateLimit(request, handler, 'ai')
+ */
+export async function withRateLimit<T>(
+  request: Request,
+  categoryOrHandler: RateLimitCategory | ((request: Request) => Promise<T>),
+  handlerOrCategory?: ((request: Request) => Promise<T>) | RateLimitCategory
+): Promise<T> {
+  // Parse arguments (support both orderings for backwards compatibility)
+  let category: RateLimitCategory = 'default';
+  let handler: (request: Request) => Promise<T>;
+
+  if (typeof categoryOrHandler === 'string') {
+    category = categoryOrHandler;
+    handler = handlerOrCategory as (request: Request) => Promise<T>;
+  } else {
+    handler = categoryOrHandler;
+    category = (handlerOrCategory as RateLimitCategory) || 'default';
+  }
+
+  // Get identifier from IP or user token
+  const identifier = getIdentifier(request);
+
+  // Check rate limit
+  const result = await checkRateLimit(identifier, category);
+
+  if (!result.allowed) {
+    throw new RateLimitError('Too many requests', result);
+  }
+
+  // Call the original handler
+  return handler(request);
+}
+
+export class RateLimitError extends Error {
+  public readonly retryAfter: number;
+  public readonly limit: number;
+  public readonly remaining: number;
+
+  constructor(message: string, result: RateLimitResult) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfter = Math.ceil(result.resetIn / 1000);
+    this.limit = result.limit;
+    this.remaining = result.remaining;
+  }
+}
+
+/**
+ * Extract identifier from request for rate limiting
+ * Priority: user token > IP address
+ */
+function getIdentifier(request: Request): string {
+  // Try to get user ID from authorization header
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    // Use token as identifier (could decode JWT to get user ID)
+    return `user:${token.substring(0, 10)}`;
+  }
+
+  // Fall back to IP address
+  const ip = request.headers.get('x-forwarded-for') ||
+             request.headers.get('x-real-ip') ||
+             'unknown';
+  return `ip:${ip}`;
 }
 
 // Cleanup old in-memory buckets every 5 minutes

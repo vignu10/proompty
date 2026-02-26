@@ -204,4 +204,77 @@ Write just the prompt content directly - no JSON wrapping, no title, no tags. Wr
       if (content) yield content;
     }
   }
+
+  /**
+   * Suggest tags for a prompt based on its content
+   */
+  static async suggestTags(content: string, title?: string): Promise<string[]> {
+    const system = `You are a prompt engineering expert specializing in metadata and categorization.
+Your task is to suggest relevant, specific tags for AI prompts.
+
+Rules for tags:
+1. Return 3-6 specific, lowercase tags
+2. Tags should be keywords that help users find and categorize prompts
+3. Be specific: "email-writing" not "writing", "python" not "coding"
+4. Use hyphens for multi-word tags: "code-review", "seo-optimization"
+5. Include both function (what it does) and domain (what area) tags
+6. Avoid generic tags like "ai", "prompt", "assistant"
+7. Focus on actionable, searchable terms
+
+Your output must be valid JSON array of strings: ["tag1", "tag2", "tag3"]`;
+
+    const userMsg = `Suggest tags for this prompt:\n${title ? `Title: ${title}\n` : ''}Content: ${content}`;
+
+    const result = await this.callLLM(system, userMsg, 0.5);
+
+    try {
+      const cleaned = result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch {
+      // Fallback: extract potential tags from the response
+      const tagMatches = result.match(/["']([\w-]+)["']/g);
+      return tagMatches?.map((t) => t.replace(/["']/g, '')) || [];
+    }
+  }
+
+  /**
+   * Suggest a category for a prompt based on its content
+   */
+  static async suggestCategory(content: string, title?: string): Promise<{ category: string; confidence: number }> {
+    const system = `You are a prompt engineering expert specializing in categorization.
+Your task is to suggest the most appropriate category for an AI prompt.
+
+Available categories:
+- Writing: Blog posts, articles, creative writing, copywriting, editing
+- Coding: Programming, code review, debugging, documentation
+- Marketing: SEO, social media, ads, content marketing
+- Business: Plans, strategy, analysis, presentations
+- Education: Teaching, learning, tutoring, explanations
+- Creative: Art, music, storytelling, brainstorming
+- Analysis: Data analysis, research, summarization, insights
+- Communication: Emails, messages, scripts, translations
+- Productivity: Task management, planning, organization
+- Research: Information gathering, fact-checking, literature review
+
+Your output must be valid JSON with this structure:
+{"category": "Category Name", "confidence": 0.0-1.0}
+
+The confidence score represents how certain you are that this category fits best.`;
+
+    const userMsg = `Suggest the best category for this prompt:\n${title ? `Title: ${title}\n` : ''}Content: ${content}`;
+
+    const result = await this.callLLM(system, userMsg, 0.3);
+
+    try {
+      const cleaned = result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch {
+      // Fallback: try to extract a category from the response
+      const categoryMatch = result.match(/category[":\s]+["']?([\w\s]+)["']?/i);
+      return {
+        category: categoryMatch?.[1] || 'Writing',
+        confidence: 0.5,
+      };
+    }
+  }
 }

@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       | "private"
       | "starred") || "all";
   const tags = url.searchParams.get("tags")?.split(",").filter(Boolean) || [];
+  const categoryIds = url.searchParams.get("categoryIds")?.split(",").filter(Boolean) || [];
   const page = parseInt(url.searchParams.get("page") || "1");
   const pageSize = parseInt(url.searchParams.get("pageSize") || "10");
 
@@ -36,7 +37,8 @@ export async function GET(request: Request) {
     visibility,
     page,
     pageSize,
-    tags
+    tags,
+    categoryIds
   );
   if ("error" in result) {
     return NextResponse.json(
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
   try {
     // Parse and validate request body
     const body = await request.json();
-    const { title, content, tags, isPublic, category, promptId, action } = body;
+    const { title, content, tags, isPublic, categoryIds, promptId, action } = body;
 
     // Validate action type if provided
     if (action && !['create', 'fork'].includes(action)) {
@@ -163,7 +165,7 @@ export async function POST(request: Request) {
     const result = await PromptController.createPrompt({
       title: title.trim(),
       content: content.trim(),
-      category: category?.trim() || null,
+      categoryIds: Array.isArray(categoryIds) ? categoryIds.filter((id: string) => id?.trim()) : [],
       tags: Array.isArray(tags) ? tags.filter(tag => typeof tag === 'string' && tag.trim()) : [],
       userId: auth.userId,
       isPublic: Boolean(isPublic),

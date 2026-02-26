@@ -32,16 +32,18 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  Checkbox,
+  IconButton as ChakraIconButton,
 } from "@chakra-ui/react";
 import SearchBar, { SearchMode } from "../components/SearchBar";
 import PromptCard from "../components/PromptCard";
 import PromptModal from "../components/PromptModal";
+import CategorySelector, { Category } from "../components/CategorySelector";
+import BulkActionsBar from "../components/BulkActionsBar";
+import GradientText from "../components/GradientText";
 import { AddIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
-import {
-  containerStyles,
-  gradientTextStyles,
-  featureCardStyles,
-} from "../styles/components";
+import { spacing, colors } from "@/app/theme/tokens";
+import { motion } from "framer-motion";
 
 interface User {
   name: string | null;
@@ -59,6 +61,10 @@ interface Prompt {
   user: User;
   starredBy: string[];
   originalPromptId?: string | null;
+  categories?: {
+    category: Category;
+    sortOrder: number;
+  }[];
 }
 
 type PromptVisibility = "all" | "public" | "private";
@@ -71,6 +77,9 @@ export default function PromptsPage() {
   const [searchMode, setSearchMode] = useState<SearchMode>("hybrid");
   const [searchQuery, setSearchQuery] = useState("");
   const [visibility, setVisibility] = useState<PromptVisibility>("all");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedPromptIds, setSelectedPromptIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
@@ -94,6 +103,53 @@ export default function PromptsPage() {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
+  // Animation variants for Framer Motion
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+  };
+
+  const cardVariants = {
+    hidden: {
+      opacity: 0,
+      y: 50,
+      scale: 0.95,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 100,
+        damping: 12,
+        mass: 0.8,
+      },
+    },
+  };
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
   // Fetch paginated prompts
   const fetchPrompts = useCallback(async () => {
     try {
@@ -106,6 +162,11 @@ export default function PromptsPage() {
         queryParams.set("userId", user.email);
       } else {
         queryParams.set("visibility", visibility);
+      }
+
+      // Add category filter if any categories are selected
+      if (selectedCategoryIds.length > 0) {
+        queryParams.set("categoryIds", selectedCategoryIds.join(","));
       }
 
       const response = await fetch(`/api/prompts?${queryParams.toString()}`, {
@@ -135,7 +196,7 @@ export default function PromptsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, visibility, currentPage, user, toast]);
+  }, [token, visibility, currentPage, user, toast, selectedCategoryIds]);
 
   // API-based search with debounce
   const performSearch = useCallback(
@@ -287,6 +348,216 @@ export default function PromptsPage() {
     }
   };
 
+  // Bulk action handlers
+  const handleClearSelection = () => {
+    setSelectedPromptIds([]);
+  };
+
+  const handleTogglePromptSelection = (promptId: string) => {
+    setSelectedPromptIds((prev) =>
+      prev.includes(promptId)
+        ? prev.filter((id) => id !== promptId)
+        : [...prev, promptId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const allIds = filteredPrompts.map((p) => p.id);
+    setSelectedPromptIds(allIds);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!user || selectedPromptIds.length === 0) return;
+
+    try {
+      const response = await fetch("/api/prompts/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "delete",
+          promptIds: selectedPromptIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete prompts");
+      }
+
+      const result = await response.json();
+
+      setPrompts(prompts.filter((p) => !selectedPromptIds.includes(p.id)));
+      setFilteredPrompts(
+        filteredPrompts.filter((p) => !selectedPromptIds.includes(p.id))
+      );
+      setSelectedPromptIds([]);
+
+      toast({
+        title: "Success",
+        description: `${result.success} prompts deleted successfully`,
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to delete prompts",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleBulkStar = async () => {
+    if (!user || selectedPromptIds.length === 0) return;
+
+    try {
+      const response = await fetch("/api/prompts/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "star",
+          promptIds: selectedPromptIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to star prompts");
+      }
+
+      const result = await response.json();
+      setSelectedPromptIds([]);
+
+      toast({
+        title: "Success",
+        description: `${result.success} prompts starred successfully`,
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to star prompts",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleBulkExport = (format: "json" | "csv") => {
+    if (selectedPromptIds.length === 0) return;
+
+    const promptsToExport = filteredPrompts.filter((p) =>
+      selectedPromptIds.includes(p.id)
+    );
+
+    if (format === "json") {
+      const dataStr = JSON.stringify(promptsToExport, null, 2);
+      const dataBlob = new Blob([dataStr], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `prompts-export-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (format === "csv") {
+      const headers = ["Title", "Content", "Tags", "Categories"];
+      const rows = promptsToExport.map((p) => [
+        `"${p.title.replace(/"/g, '""')}"`,
+        `"${p.content.replace(/"/g, '""')}"`,
+        `"${(p.tags || []).join(", ")}"`,
+        `"${(p.categories || [])
+          .map((pc) => pc.category.name)
+          .join(", ")}"`,
+      ]);
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row) => row.join(",")),
+      ].join("\n");
+
+      const dataBlob = new Blob([csvContent], {
+        type: "text/csv",
+      });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `prompts-export-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleBulkAddTags = async (tags: string[]) => {
+    if (!user) return;
+
+    try {
+      const response = await fetch("/api/prompts/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "addTags",
+          promptIds: selectedPromptIds,
+          tags,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add tags");
+      }
+
+      await fetchPrompts();
+      setSelectedPromptIds([]);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleBulkSetCategories = async (categoryIds: string[]) => {
+    if (!user) return;
+
+    try {
+      const response = await fetch("/api/prompts/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "setCategories",
+          promptIds: selectedPromptIds,
+          categoryIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to set categories");
+      }
+
+      await fetchPrompts();
+      setSelectedPromptIds([]);
+    } catch (error) {
+      throw error;
+    }
+  };
+
   if (loading) {
     return (
       <Flex justify="center" align="center" minH="60vh">
@@ -297,8 +568,9 @@ export default function PromptsPage() {
 
   return (
     <>
+      {/* Main Content */}
       <Container {...containerStyles}>
-        <VStack spacing={8} align="stretch">
+          <VStack spacing={8} align="stretch">
           <VStack spacing={6} width="100%">
             <Flex
               justify="space-between"
@@ -368,6 +640,57 @@ export default function PromptsPage() {
                 </select>
               </Box>
             </Flex>
+
+            {/* Category Filter */}
+            {categories.length > 0 && (
+              <Box width="100%">
+                <CategorySelector
+                  selectedCategoryIds={selectedCategoryIds}
+                  onCategoryChange={(ids) => {
+                    setSelectedCategoryIds(ids);
+                    setCurrentPage(1);
+                  }}
+                  categories={categories}
+                  placeholder="Filter by categories..."
+                  isMultiSelect={true}
+                />
+              </Box>
+            )}
+
+            {/* Select All & Selection Info */}
+            <Flex justify="space-between" align="center" width="100%">
+              <Checkbox
+                isChecked={
+                  selectedPromptIds.length > 0 &&
+                  selectedPromptIds.length === filteredPrompts.length
+                }
+                isIndeterminate={
+                  selectedPromptIds.length > 0 &&
+                  selectedPromptIds.length < filteredPrompts.length
+                }
+                onChange={handleSelectAll}
+                colorScheme="blue"
+                size="md"
+              >
+                <Text color="whiteAlpha.900" ml={2}>
+                  {selectedPromptIds.length > 0
+                    ? `${selectedPromptIds.length} of ${filteredPrompts.length} selected`
+                    : "Select All"}
+                </Text>
+              </Checkbox>
+
+              {selectedPromptIds.length > 0 && (
+                <Text
+                  color={colors.text.muted}
+                  fontSize="sm"
+                  cursor="pointer"
+                  onClick={handleClearSelection}
+                  _hover={{ color: colors.primary[50] }}
+                >
+                  Clear selection
+                </Text>
+              )}
+            </Flex>
           </VStack>
 
           {filteredPrompts.length === 0 ? (
@@ -413,130 +736,46 @@ export default function PromptsPage() {
             </Box>
           ) : (
             <VStack spacing={6}>
-              <Grid
-                templateColumns={{
-                  base: "1fr",
-                  md: "repeat(2, minmax(0, 1fr))",
-                  lg: "repeat(3, minmax(0, 1fr))",
-                }}
-                gap={6}
-                width="100%"
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                style={{ width: "100%" }}
               >
-                {filteredPrompts.map((prompt) => (
-                  <PromptCard
-                    key={prompt.id}
-                    prompt={prompt}
-                    currentUserId={user?.id || ""}
-                    onView={(promptId) => {
-                      const found =
-                        filteredPrompts.find((p) => p.id === promptId) ||
-                        prompts.find((p) => p.id === promptId);
-                      if (found) {
-                        setSelectedPrompt(found);
-                        onViewOpen();
-                      }
-                    }}
-                    onEdit={(promptId) => {
-                      router.push(`/prompts/${promptId}/edit`);
-                    }}
-                    onDelete={async (promptId) => {
-                      if (!user) return;
-
-                      try {
-                        const response = await fetch(
-                          `/api/prompts/${promptId}`,
-                          {
-                            method: "DELETE",
-                            headers: {
-                              Authorization: `Bearer ${token}`,
-                            },
+                <Grid
+                  templateColumns={{
+                    base: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                    lg: "repeat(3, minmax(0, 1fr))",
+                  }}
+                  gap={6}
+                  width="100%"
+                >
+                  {filteredPrompts.map((prompt, index) => (
+                    <motion.div
+                      key={prompt.id}
+                      variants={cardVariants}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <PromptCard
+                        key={prompt.id}
+                        prompt={prompt}
+                        currentUserId={user?.id || ""}
+                        isSelected={selectedPromptIds.includes(prompt.id)}
+                        onToggleSelect={handleTogglePromptSelection}
+                        onView={(promptId) => {
+                          const found =
+                            filteredPrompts.find((p) => p.id === promptId) ||
+                            prompts.find((p) => p.id === promptId);
+                          if (found) {
+                            setSelectedPrompt(found);
+                            onViewOpen();
                           }
-                        );
-
-                        if (!response.ok) {
-                          throw new Error("Failed to delete prompt");
-                        }
-
-                        setPrompts(prompts.filter((p) => p.id !== promptId));
-                        setFilteredPrompts(
-                          filteredPrompts.filter((p) => p.id !== promptId)
-                        );
-                        toast({
-                          title: "Prompt deleted",
-                          status: "success",
-                          duration: 3000,
-                          isClosable: true,
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Failed to delete prompt",
-                          status: "error",
-                          duration: 3000,
-                          isClosable: true,
-                        });
-                      }
-                    }}
-                    onStar={async (promptId) => {
-                      if (!user) {
-                        toast({
-                          title: "Please log in",
-                          description:
-                            "You need to be logged in to star prompts",
-                          status: "warning",
-                          duration: 3000,
-                          isClosable: true,
-                        });
-                        return;
-                      }
-
-                      try {
-                        const response = await fetch("/api/prompts", {
-                          method: "PUT",
-                          headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${token}`,
-                          },
-                          body: JSON.stringify({ promptId, action: "star" }),
-                        });
-
-                        if (!response.ok) {
-                          throw new Error("Failed to star prompt");
-                        }
-
-                        const updatedPrompt = await response.json();
-                        setPrompts(
-                          prompts.map((p) =>
-                            p.id === promptId ? updatedPrompt : p
-                          )
-                        );
-                        setFilteredPrompts(
-                          filteredPrompts.map((p) =>
-                            p.id === promptId ? updatedPrompt : p
-                          )
-                        );
-
-                        const isStarred = updatedPrompt.starredBy.includes(
-                          user.id
-                        );
-                        toast({
-                          title: isStarred
-                            ? "Prompt starred"
-                            : "Prompt unstarred",
-                          status: "success",
-                          duration: 2000,
-                          isClosable: true,
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Failed to star prompt",
-                          status: "error",
-                          duration: 3000,
-                          isClosable: true,
-                        });
-                      }
-                    }}
+                        }}
+                        onEdit={(promptId) => {
+                          router.push(`/prompts/${promptId}/edit`);
+                        }}
                     onFork={
                       prompt.isPublic
                         ? async (promptId) => {
@@ -596,8 +835,10 @@ export default function PromptsPage() {
                         : undefined
                     }
                   />
-                ))}
-              </Grid>
+                    </motion.div>
+                  ))}
+                </Grid>
+              </motion.div>
 
               {filteredPrompts.length > 0 && !searchQuery.trim() && (
                 <Box>
@@ -664,6 +905,19 @@ export default function PromptsPage() {
             </VStack>
           )}
 
+          {/* Bulk Actions Bar */}
+          {selectedPromptIds.length > 0 && (
+            <BulkActionsBar
+              selectedCount={selectedPromptIds.length}
+              onClearSelection={handleClearSelection}
+              onDelete={handleBulkDelete}
+              onStar={handleBulkStar}
+              onExport={handleBulkExport}
+              onAddTags={handleBulkAddTags}
+              onSetCategories={handleBulkSetCategories}
+            />
+          )}
+
           <AlertDialog
             isOpen={isDeleteOpen}
             leastDestructiveRef={cancelRef}
@@ -675,25 +929,23 @@ export default function PromptsPage() {
               backdropFilter="blur(8px)"
             >
               <AlertDialogContent
-                bg="space.navy"
+                bg={colors.background.elevated}
                 borderColor="whiteAlpha.200"
                 borderWidth="1px"
                 borderRadius="xl"
                 boxShadow="0 8px 32px rgba(0, 243, 255, 0.1)"
                 _dark={{
-                  bg: "space.navy",
+                  bg: colors.background.elevated,
                 }}
               >
                 <AlertDialogHeader
                   fontSize="lg"
                   fontWeight="bold"
-                  bgGradient="linear(to-r, neon.blue, neon.purple)"
-                  bgClip="text"
                   borderBottom="1px solid"
                   borderColor="whiteAlpha.200"
-                  pb={4}
+                  pb={spacing.sm}
                 >
-                  Delete Prompt
+                  <GradientText variant="primary">Delete Prompt</GradientText>
                 </AlertDialogHeader>
 
                 <AlertDialogBody py={6}>

@@ -3,6 +3,7 @@
 import { Input, InputGroup, InputLeftElement, Select, HStack, Spinner } from "@chakra-ui/react";
 import { SearchIcon } from "@chakra-ui/icons";
 import { ChangeEvent } from "react";
+import { colors, spacing } from "@/app/theme/tokens";
 
 export type SearchMode = "keyword" | "semantic" | "hybrid";
 
@@ -28,13 +29,13 @@ export default function SearchBar({
   };
 
   return (
-    <HStack spacing={3} width="100%">
+    <HStack spacing={spacing.sm} width="100%">
       <InputGroup flex={1}>
-        <InputLeftElement pointerEvents="none">
+        <InputLeftElement pointerEvents="none" aria-hidden="true">
           {isSearching ? (
-            <Spinner size="sm" color="neon.blue" />
+            <Spinner size="sm" color={colors.primary[50]} aria-label="Searching..." />
           ) : (
-            <SearchIcon color="gray.400" />
+            <SearchIcon color={colors.text.muted} />
           )}
         </InputLeftElement>
         <Input
@@ -43,9 +44,14 @@ export default function SearchBar({
           placeholder={placeholder}
           variant="futuristic"
           size="lg"
+          aria-label={placeholder}
+          bg={colors.background.elevated}
+          borderColor="whiteAlpha.200"
+          color={colors.text.primary}
+          _placeholder={{ color: colors.text.muted }}
           _focus={{
-            borderColor: "neon.blue",
-            boxShadow: "0 0 10px rgba(0, 243, 255, 0.3)",
+            borderColor: colors.primary[50],
+            boxShadow: `0 0 10px ${colors.primary[50]}40`,
           }}
         />
       </InputGroup>
@@ -55,14 +61,15 @@ export default function SearchBar({
           onChange={(e) => onSearchModeChange(e.target.value as SearchMode)}
           size="lg"
           width="160px"
-          bg="space.navy"
+          bg={colors.background.elevated}
           borderColor="whiteAlpha.200"
-          color="whiteAlpha.900"
-          _hover={{ borderColor: "neon.blue" }}
+          color={colors.text.primary}
+          _hover={{ borderColor: colors.primary[50] }}
           _focus={{
-            borderColor: "neon.blue",
-            boxShadow: "0 0 10px rgba(0, 243, 255, 0.3)",
+            borderColor: colors.primary[50],
+            boxShadow: `0 0 10px ${colors.primary[50]}40`,
           }}
+          aria-label="Select search mode"
         >
           <option value="hybrid">Hybrid</option>
           <option value="semantic">Semantic</option>

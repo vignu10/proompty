@@ -27,6 +27,8 @@ import {
   MoonIcon,
   SunIcon,
 } from "@chakra-ui/icons";
+import { colors, spacing } from "@/app/theme/tokens";
+import GradientText from "./GradientText";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -58,16 +60,16 @@ export default function Navbar() {
     >
       <Container maxW="7xl" py={4}>
         <Flex justify="space-between" align="center">
-          <ChakraLink href="/" _hover={{ textDecoration: "none" }}>
-            <Heading
+          <ChakraLink href="/" _hover={{ textDecoration: "none" }} aria-label="Proompty home">
+            <GradientText
               size="lg"
-              bgGradient="linear(to-r, neon.blue, neon.purple)"
-              bgClip="text"
+              variant="primary"
               fontWeight="bold"
               letterSpacing="tight"
+              as="h1"
             >
               Proompty
-            </Heading>
+            </GradientText>
           </ChakraLink>
 
           {/* Desktop Navigation */}
